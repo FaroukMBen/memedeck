@@ -11,6 +11,7 @@ const mediaSchema = z.object({
   file_url: z.string(),
   file_type: z.string(),
   original_title: z.string().nullable().optional(),
+  tags: z.array(z.string()).default([]),
   original_uploader_id: z.string().uuid().nullable(),
   likes_count: z.number().int().default(0),
   dislikes_count: z.number().int().default(0),
@@ -145,17 +146,26 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      const items = (data ?? []).map((row: any) => ({
-        id: row.id,
-        file_url: row.file_url,
-        file_type: row.file_type,
-        original_title: row.original_title ?? null,
-        original_uploader_id: row.original_uploader_id,
-        likes_count: row.likes_count ?? 0,
-        dislikes_count: row.dislikes_count ?? 0,
-        user_reaction: userReactionsMap.get(row.id) ?? null,
-        created_at: row.created_at,
-      }));
+      const items = (data ?? []).map((row: any) => {
+        const sourceTags = (
+          Array.isArray(row.user_medias)
+            ? row.user_medias[0]?.tags
+            : row.user_medias?.tags
+        ) ?? [];
+
+        return {
+          id: row.id,
+          file_url: row.file_url,
+          file_type: row.file_type,
+          original_title: row.original_title ?? null,
+          tags: Array.isArray(sourceTags) ? sourceTags : [],
+          original_uploader_id: row.original_uploader_id,
+          likes_count: row.likes_count ?? 0,
+          dislikes_count: row.dislikes_count ?? 0,
+          user_reaction: userReactionsMap.get(row.id) ?? null,
+          created_at: row.created_at,
+        };
+      });
 
       return { items };
     }
@@ -237,12 +247,13 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         .from(env.SUPABASE_STORAGE_BUCKET)
         .getPublicUrl(storagePath);
 
-      const { data: media, error: mediaError } = await supabaseAdmin
+      let mediaResult = await supabaseAdmin
         .from('medias')
         .insert({
           file_url: publicUrlData.publicUrl,
           file_type: processed.mimeType,
           original_title: resolvedTitle,
+          tags: resolvedTags,
           original_uploader_id: userId,
           likes_count: 0,
           dislikes_count: 0,
@@ -250,10 +261,27 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         .select('id, file_url, file_type, original_title, original_uploader_id, likes_count, dislikes_count, created_at')
         .single();
 
-      if (mediaError || !media) {
+      if (mediaResult.error) {
+        mediaResult = await supabaseAdmin
+          .from('medias')
+          .insert({
+            file_url: publicUrlData.publicUrl,
+            file_type: processed.mimeType,
+            original_title: resolvedTitle,
+            original_uploader_id: userId,
+            likes_count: 0,
+            dislikes_count: 0,
+          })
+          .select('id, file_url, file_type, original_title, original_uploader_id, likes_count, dislikes_count, created_at')
+          .single();
+      }
+
+      const media = mediaResult.data;
+
+      if (mediaResult.error || !media) {
         return reply.status(500).send({
           error: 'DatabaseError',
-          message: mediaError?.message ?? 'Failed to insert media record',
+          message: mediaResult.error?.message ?? 'Failed to insert media record',
         });
       }
 

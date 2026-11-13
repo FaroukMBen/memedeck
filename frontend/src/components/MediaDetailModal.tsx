@@ -418,8 +418,8 @@ export function MediaDetailModal({
                 </div>
               </div>
 
-              {/* User's tags display */}
-              {userMedia?.tags && userMedia.tags.length > 0 && (
+              {/* Tags display (User's tags or original meme tags) */}
+              {userMedia?.tags && userMedia.tags.length > 0 ? (
                 <div className="detail-tags-box">
                   <span className="tags-label">
                     <Tag size={13} /> Your tags:
@@ -432,7 +432,20 @@ export function MediaDetailModal({
                     ))}
                   </div>
                 </div>
-              )}
+              ) : media.tags && media.tags.length > 0 ? (
+                <div className="detail-tags-box">
+                  <span className="tags-label">
+                    <Tag size={13} /> Tags:
+                  </span>
+                  <div className="detail-tags-list">
+                    {media.tags.map((t) => (
+                      <span key={t} className="detail-tag-chip">
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="detail-meta-list">
                 <div className="meta-item">

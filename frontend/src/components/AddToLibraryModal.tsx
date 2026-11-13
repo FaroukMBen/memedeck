@@ -33,8 +33,8 @@ export function AddToLibraryModal({
   useEffect(() => {
     if (media && isOpen) {
       setTitle(media.original_title || '');
-      // If media has default tags or we initialize empty
-      setTags([]);
+      // Pre-fill with the meme's permanent tags from upload
+      setTags(media.tags && media.tags.length > 0 ? [...media.tags] : []);
       setTagInput('');
       setIsPublic(true);
       setIsNsfw(false);
@@ -149,7 +149,31 @@ export function AddToLibraryModal({
 
           {/* Interactive Tag Chips */}
           <div className="form-group">
-            <label className="form-label">Tags</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+              <label className="form-label" style={{ margin: 0 }}>Tags</label>
+              {media.tags && media.tags.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.6rem', fontSize: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTags([...media.tags!])}
+                    title="Reset to the meme's original permanent tags"
+                    style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    Restore original
+                  </button>
+                  {tags.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTags([])}
+                      title="Remove all tags"
+                      style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="tags-input-container">
               <Tag size={14} className="tags-icon" />
               <div className="tags-chip-list">
@@ -177,7 +201,9 @@ export function AddToLibraryModal({
               </div>
             </div>
             <span className="form-hint">
-              Press Enter or comma to create a tag. Click the cross on a tag to remove it.
+              {media.tags && media.tags.length > 0
+                ? "Pre-filled with the meme's original tags. Keep them, click × to remove, or type new tags."
+                : "Press Enter or comma to create tags. Click × on a tag to remove it."}
             </span>
           </div>
 

@@ -2140,6 +2140,28 @@ body {
   user-select: none;
 }
 
+.card-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.2rem 0;
+}
+
+.card-tag-pill {
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.1);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.card-tag-more {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
 /* Add to Library Modal Dialog */
 .add-library-modal-box {
   max-width: 520px;

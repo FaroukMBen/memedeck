@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.medias (
     file_url TEXT NOT NULL,
     file_type TEXT NOT NULL,
     original_title TEXT,
+    tags TEXT[] NOT NULL DEFAULT '{}',
     original_uploader_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     likes_count INT NOT NULL DEFAULT 0,
     dislikes_count INT NOT NULL DEFAULT 0,

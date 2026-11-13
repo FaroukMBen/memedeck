@@ -909,6 +909,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
                   file_url: z.string(),
                   file_type: z.string(),
                   original_title: z.string().nullable().optional(),
+                  tags: z.array(z.string()).default([]),
                   original_uploader_id: z.string().uuid().nullable(),
                   likes_count: z.number().default(0),
                   dislikes_count: z.number().default(0),

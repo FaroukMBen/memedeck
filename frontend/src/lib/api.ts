@@ -116,6 +116,7 @@ export interface MediaItem {
   file_url: string;
   file_type: string;
   original_title: string | null;
+  tags?: string[];
   original_uploader_id: string | null;
   likes_count: number;
   dislikes_count: number;
@@ -147,6 +148,8 @@ export interface CollectionItem {
   user_id: string;
   title: string;
   is_public: boolean;
+  item_count?: number;
+  previews?: { file_url: string; file_type: string }[];
 }
 
 export interface CollectionMediaItem {

@@ -36,6 +36,21 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: true,
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  });
+
+  app.setErrorHandler((error: any, request, reply) => {
+    app.log.error(error);
+    const origin = request.headers.origin;
+    if (origin) {
+      reply.header('Access-Control-Allow-Origin', origin);
+      reply.header('Access-Control-Allow-Credentials', 'true');
+    }
+    reply.status(error.statusCode ?? 500).send({
+      error: error.name || 'InternalServerError',
+      message: error.message || 'An unexpected error occurred',
+    });
   });
 
   await app.register(multipart, {
