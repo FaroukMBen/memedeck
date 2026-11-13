@@ -6,6 +6,7 @@ import { supabaseAdmin } from '../../lib/supabase.js';
 const userProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
+  username: z.string().nullable().optional(),
   is_library_public: z.boolean(),
 });
 
@@ -35,7 +36,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
       const userId = request.user!.id;
       const { data, error } = await supabaseAdmin
         .from('users')
-        .select('id, email, is_library_public')
+        .select('id, email, username, is_library_public')
         .eq('id', userId)
         .single();
 
@@ -59,7 +60,10 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
         summary: 'Update authenticated user profile settings',
         security: [{ bearerAuth: [] }],
         body: z.object({
-          is_library_public: z.boolean(),
+          username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+          is_library_public: z.boolean().optional(),
+        }).refine((data) => data.username !== undefined || data.is_library_public !== undefined, {
+          message: 'At least one field must be provided',
         }),
         response: {
           200: userProfileSchema,
@@ -69,13 +73,13 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const userId = request.user!.id;
-      const { is_library_public } = request.body;
+      const updatePayload = request.body;
 
       const { data, error } = await supabaseAdmin
         .from('users')
-        .update({ is_library_public })
+        .update(updatePayload)
         .eq('id', userId)
-        .select('id, email, is_library_public')
+        .select('id, email, username, is_library_public')
         .single();
 
       if (error || !data) {

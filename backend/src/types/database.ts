@@ -1,6 +1,7 @@
 export interface UserRecord {
   id: string;
   email: string;
+  username: string | null;
   is_library_public: boolean;
 }
 

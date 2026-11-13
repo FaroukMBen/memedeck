@@ -344,7 +344,7 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [app.authenticate],
       schema: {
         tags: ['Medias'],
-        summary: 'Remove a media item from your library (preserves canonical media for forks)',
+        summary: 'Remove a media item from your library with automatic garbage collection of unused files',
         security: [{ bearerAuth: [] }],
         params: z.object({
           userMediaId: z.string().uuid(),
@@ -352,6 +352,7 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         response: {
           204: z.null(),
           404: errorSchema,
+          500: errorSchema,
         },
       },
     },
@@ -359,19 +360,68 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
       const { userMediaId } = request.params;
       const userId = request.user!.id;
 
-      const { data, error } = await supabaseAdmin
+      // 1. Find user_media to get the underlying media_id
+      const { data: userMedia, error: findError } = await supabaseAdmin
         .from('user_medias')
-        .delete()
+        .select('id, media_id')
         .eq('id', userMediaId)
         .eq('user_id', userId)
-        .select('id')
         .single();
 
-      if (error || !data) {
+      if (findError || !userMedia) {
         return reply.status(404).send({
           error: 'NotFound',
           message: 'Library item not found',
         });
+      }
+
+      const mediaId = userMedia.media_id;
+
+      // 2. Delete the user_media record
+      const { error: deleteError } = await supabaseAdmin
+        .from('user_medias')
+        .delete()
+        .eq('id', userMediaId)
+        .eq('user_id', userId);
+
+      if (deleteError) {
+        return reply.status(500).send({
+          error: 'DatabaseError',
+          message: deleteError.message,
+        });
+      }
+
+      // 3. Garbage Collection: check if other users still have this media in their library
+      const { count, error: countError } = await supabaseAdmin
+        .from('user_medias')
+        .select('id', { count: 'exact', head: true })
+        .eq('media_id', mediaId);
+
+      if (!countError && (count === 0 || count === null)) {
+        // No one else references this media: retrieve file_url before deleting canonical row
+        const { data: media } = await supabaseAdmin
+          .from('medias')
+          .select('id, file_url')
+          .eq('id', mediaId)
+          .single();
+
+        if (media) {
+          // Delete canonical media record
+          await supabaseAdmin
+            .from('medias')
+            .delete()
+            .eq('id', mediaId);
+
+          // Extract storage file path and physically delete from Supabase Storage
+          const bucket = env.SUPABASE_STORAGE_BUCKET;
+          const urlParts = media.file_url.split(`/${bucket}/`);
+          if (urlParts.length > 1) {
+            const storagePath = decodeURIComponent(urlParts[1]);
+            await supabaseAdmin.storage
+              .from(bucket)
+              .remove([storagePath]);
+          }
+        }
       }
 
       return reply.status(204).send(null);
