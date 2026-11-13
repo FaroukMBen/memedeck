@@ -1,12 +1,29 @@
 import { useEffect, useState } from 'react';
-import { Compass, FolderHeart, Library, Sparkles } from 'lucide-react';
+import {
+  Compass,
+  FolderHeart,
+  Library,
+  LogOut,
+  Plus,
+  Sparkles,
+  User as UserIcon,
+} from 'lucide-react';
 import { memedeckApi } from './lib/api';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/AuthModal';
+import { UploadModal } from './components/UploadModal';
+import { DiscoverView } from './components/DiscoverView';
+import { LibraryView } from './components/LibraryView';
+import { CollectionsView } from './components/CollectionsView';
 
 type Tab = 'discover' | 'library' | 'collections';
 
-export default function App() {
+function AppContent() {
+  const { user, username, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('discover');
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   useEffect(() => {
     memedeckApi
@@ -35,7 +52,13 @@ export default function App() {
           </button>
           <button
             className={`nav-btn ${activeTab === 'library' ? 'active' : ''}`}
-            onClick={() => setActiveTab('library')}
+            onClick={() => {
+              if (!user) {
+                setIsAuthModalOpen(true);
+              } else {
+                setActiveTab('library');
+              }
+            }}
           >
             <Library size={16} />
             My Library
@@ -49,15 +72,119 @@ export default function App() {
           </button>
         </nav>
 
-        <div className="status-pill" title="Fastify Backend Connection">
-          <span
-            className={`status-dot ${apiStatus === 'online' ? 'online' : apiStatus === 'offline' ? 'offline' : ''
+        <div className="nav-actions">
+          {/* + Add Media to Library */}
+          <button
+            className="add-media-btn"
+            onClick={() => {
+              if (!user) {
+                setIsAuthModalOpen(true);
+              } else {
+                setIsUploadModalOpen(true);
+              }
+            }}
+            title="Add Media to Library"
+          >
+            <Plus size={16} />
+            <span>Add Media</span>
+          </button>
+
+          {/* User Authentication state */}
+          {user ? (
+            <div className="user-profile-badge">
+              <span className="user-avatar-circle">
+                {(username?.[0] ?? 'U').toUpperCase()}
+              </span>
+              <span>{username}</span>
+              <button
+                className="signout-btn"
+                onClick={() => signOut()}
+                title="Sign Out"
+                aria-label="Sign Out"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          ) : (
+            <button
+              className="connect-btn"
+              onClick={() => setIsAuthModalOpen(true)}
+            >
+              <UserIcon size={15} />
+              <span>Connect</span>
+            </button>
+          )}
+
+          {/* Backend Status indicator */}
+          <div className="status-pill" title="Fastify Backend Connection">
+            <span
+              className={`status-dot ${
+                apiStatus === 'online'
+                  ? 'online'
+                  : apiStatus === 'offline'
+                  ? 'offline'
+                  : ''
               }`}
-          />
-          API: {apiStatus}
+            />
+            API: {apiStatus}
+          </div>
         </div>
       </header>
+
+      <main className="main-content">
+        {activeTab === 'discover' && (
+          <DiscoverView
+            onRequireAuth={() => setIsAuthModalOpen(true)}
+            onOpenUpload={() => {
+              if (!user) {
+                setIsAuthModalOpen(true);
+              } else {
+                setIsUploadModalOpen(true);
+              }
+            }}
+          />
+        )}
+
+        {activeTab === 'library' && (
+          <LibraryView
+            onRequireAuth={() => setIsAuthModalOpen(true)}
+            onOpenUpload={() => {
+              if (!user) {
+                setIsAuthModalOpen(true);
+              } else {
+                setIsUploadModalOpen(true);
+              }
+            }}
+          />
+        )}
+
+        {activeTab === 'collections' && (
+          <CollectionsView
+            onRequireAuth={() => setIsAuthModalOpen(true)}
+          />
+        )}
+      </main>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* Upload Media Modal */}
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onRequireAuth={() => setIsAuthModalOpen(true)}
+      />
     </div>
   );
 }
 
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
