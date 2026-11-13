@@ -74,5 +74,33 @@ describe('MemeDeck API', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('GET /api/v1/users/:userId/profile validates UUID parameter', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/users/invalid-uuid/profile',
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('POST /api/v1/users/:userId/comments requires authentication', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users/11111111-1111-1111-1111-111111111111/comments',
+      payload: { content: 'Cool memes!' },
+    });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('POST /api/v1/users/:userId/friend-request requires authentication', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users/11111111-1111-1111-1111-111111111111/friend-request',
+    });
+
+    expect(res.statusCode).toBe(401);
+  });
 });
 

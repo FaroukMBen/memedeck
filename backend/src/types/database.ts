@@ -2,7 +2,29 @@ export interface UserRecord {
   id: string;
   email: string;
   username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  allow_friends_see_private: boolean;
+  allow_profile_comments: boolean;
   is_library_public: boolean;
+  created_at?: string;
+}
+
+export interface ProfileCommentRecord {
+  id: string;
+  profile_user_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+}
+
+export interface FriendshipRecord {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MediaRecord {
