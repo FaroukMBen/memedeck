@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GitFork, Check, Loader2, RefreshCw, Plus, Compass } from 'lucide-react';
+import { GitFork, Check, Loader2, RefreshCw, Plus, Compass, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { memedeckApi, type MediaItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
@@ -63,6 +63,33 @@ export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps)
     }
   };
 
+  const handleReaction = async (e: React.MouseEvent, mediaId: string, currentReaction: 1 | -1 | null, targetType: 1 | -1) => {
+    e.stopPropagation();
+    if (!user) {
+      onRequireAuth();
+      return;
+    }
+
+    const nextType = currentReaction === targetType ? 0 : targetType;
+    try {
+      const res = await memedeckApi.reactToMedia(mediaId, nextType);
+      setMedias((prev) =>
+        prev.map((m) =>
+          m.id === mediaId
+            ? {
+                ...m,
+                likes_count: res.likes_count,
+                dislikes_count: res.dislikes_count,
+                user_reaction: res.user_reaction,
+              }
+            : m
+        )
+      );
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to vote');
+    }
+  };
+
   return (
     <div className="view-container">
       <div className="view-header">
@@ -123,6 +150,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps)
             const isForked = forkedIds.has(item.id);
             const isForking = forkingId === item.id;
             const error = forkErrors[item.id];
+            const title = item.original_title || 'Untitled Meme';
 
             return (
               <div
@@ -135,6 +163,10 @@ export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps)
                 </div>
 
                 <div className="media-card-body">
+                  <h4 className="card-meme-title" title={title}>
+                    {title}
+                  </h4>
+
                   <div className="media-card-meta">
                     <span className="media-date">
                       {new Date(item.created_at).toLocaleDateString(undefined, {
@@ -142,8 +174,30 @@ export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps)
                         day: 'numeric',
                       })}
                     </span>
-                    {error && <span className="card-error">{error}</span>}
+
+                    {/* Like / Dislike reactions */}
+                    <div className="card-reactions-bar">
+                      <button
+                        className={`mini-vote-btn like ${item.user_reaction === 1 ? 'active' : ''}`}
+                        onClick={(e) => handleReaction(e, item.id, item.user_reaction, 1)}
+                        title="Like"
+                      >
+                        <ThumbsUp size={12} />
+                        <span>{item.likes_count}</span>
+                      </button>
+
+                      <button
+                        className={`mini-vote-btn dislike ${item.user_reaction === -1 ? 'active' : ''}`}
+                        onClick={(e) => handleReaction(e, item.id, item.user_reaction, -1)}
+                        title="Dislike"
+                      >
+                        <ThumbsDown size={12} />
+                        <span>{item.dislikes_count}</span>
+                      </button>
+                    </div>
                   </div>
+
+                  {error && <span className="card-error">{error}</span>}
 
                   <button
                     className={`fork-btn ${isForked ? 'forked' : ''}`}
@@ -183,6 +237,20 @@ export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps)
         onClose={() => setSelectedMedia(null)}
         onRequireAuth={onRequireAuth}
         onForked={(id) => setForkedIds((prev) => new Set(prev).add(id))}
+        onReactionUpdated={(id, likes, dislikes, reaction) => {
+          setMedias((prev) =>
+            prev.map((m) =>
+              m.id === id
+                ? {
+                    ...m,
+                    likes_count: likes,
+                    dislikes_count: dislikes,
+                    user_reaction: reaction,
+                  }
+                : m
+            )
+          );
+        }}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import {
   Loader2,
   FolderPlus,
   Library,
+  Pencil,
 } from 'lucide-react';
 import {
   memedeckApi,
@@ -152,6 +153,7 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
           {items.map((item) => {
             const media = item.media;
             if (!media) return null;
+            const title = item.custom_title || media.original_title || 'Untitled Meme';
 
             return (
               <div
@@ -170,6 +172,23 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
                 </div>
 
                 <div className="media-card-body">
+                  <h4 className="card-meme-title" title={title}>
+                    {title}
+                  </h4>
+
+                  {item.tags && item.tags.length > 0 && (
+                    <div className="card-tags-row">
+                      {item.tags.slice(0, 3).map((t) => (
+                        <span key={t} className="card-mini-tag">
+                          #{t}
+                        </span>
+                      ))}
+                      {item.tags.length > 3 && (
+                        <span className="card-more-tags">+{item.tags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="media-card-meta">
                     <button
                       className={`privacy-pill ${item.is_public ? 'public' : 'private'}`}
@@ -183,16 +202,34 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
                       <span>{item.is_public ? 'Public' : 'Private'}</span>
                     </button>
 
-                    <button
-                      className="icon-btn danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(item.id);
-                      }}
-                      title="Remove from library"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="icon-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedMedia({
+                            media,
+                            userMedia: item,
+                            isOwner: true,
+                            initialEditMode: true,
+                          });
+                        }}
+                        title="Edit title, tags and privacy"
+                      >
+                        <Pencil size={14} />
+                      </button>
+
+                      <button
+                        className="icon-btn danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item.id);
+                        }}
+                        title="Remove from library"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Add to collection button & menu */}
@@ -244,6 +281,37 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
         selected={selectedMedia}
         collections={collections}
         onClose={() => setSelectedMedia(null)}
+        onUserMediaUpdated={(updated) => {
+          setItems((prev) =>
+            prev.map((i) =>
+              i.id === updated.id
+                ? {
+                    ...i,
+                    custom_title: updated.custom_title,
+                    tags: updated.tags,
+                    is_public: updated.is_public,
+                    is_nsfw: updated.is_nsfw,
+                  }
+                : i
+            )
+          );
+          if (selectedMedia?.userMedia?.id === updated.id) {
+            setSelectedMedia((prev) =>
+              prev && prev.userMedia
+                ? {
+                    ...prev,
+                    userMedia: {
+                      ...prev.userMedia,
+                      custom_title: updated.custom_title,
+                      tags: updated.tags,
+                      is_public: updated.is_public,
+                      is_nsfw: updated.is_nsfw,
+                    },
+                  }
+                : null
+            );
+          }
+        }}
         onPrivacyChanged={(userMediaId, isPublic) => {
           setItems((prev) =>
             prev.map((i) => (i.id === userMediaId ? { ...i, is_public: isPublic } : i))

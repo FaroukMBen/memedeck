@@ -1,5 +1,5 @@
-import { useState, useRef, type FormEvent, type ChangeEvent, type DragEvent } from 'react';
-import { UploadCloud, X, CheckCircle2, Film, Image as ImageIcon, Zap } from 'lucide-react';
+import { useState, useRef, type FormEvent, type ChangeEvent, type DragEvent, type KeyboardEvent } from 'react';
+import { UploadCloud, X, CheckCircle2, Film, Image as ImageIcon, Zap, Tag, ShieldAlert } from 'lucide-react';
 import { memedeckApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { compressImageClientSide, type CompressionResult } from '../lib/compression';
@@ -15,8 +15,12 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [compressionInfo, setCompressionInfo] = useState<CompressionResult | null>(null);
+  const [title, setTitle] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [isPublic, setIsPublic] = useState(true);
+  const [isNsfw, setIsNsfw] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<CompressionResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,6 +43,12 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
     if (selected.size > 50 * 1024 * 1024) {
       setError('File is too large (max 50 MB).');
       return;
+    }
+
+    // Default title from file name if user hasn't typed one
+    const defaultName = selected.name.replace(/\.[^/.]+$/, '').trim();
+    if (!title) {
+      setTitle(defaultName);
     }
 
     // Client-side image compression for static images
@@ -88,6 +98,9 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
 
   const clearSelection = () => {
     setFile(null);
+    setTitle('');
+    setTags([]);
+    setTagInput('');
     setCompressionInfo(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
@@ -97,6 +110,21 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleAddTag = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const clean = tagInput.trim().toLowerCase().replace(/^#/, '');
+      if (clean && !tags.includes(clean)) {
+        setTags([...tags, clean]);
+      }
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter((t) => t !== tagToRemove));
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -116,7 +144,13 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
     setError(null);
 
     try {
-      await memedeckApi.uploadMedia(file, isPublic);
+      await memedeckApi.uploadMedia({
+        file,
+        title: title.trim() || undefined,
+        tags,
+        isPublic,
+        isNsfw,
+      });
       setSuccess(true);
       setTimeout(() => {
         clearSelection();
@@ -224,17 +258,75 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
               </div>
             )}
 
-            <label className="checkbox-label">
+            {/* Title field */}
+            <label className="form-group">
+              <span>Title (optional, defaults to filename)</span>
               <input
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
+                type="text"
+                placeholder={file ? file.name.replace(/\.[^/.]+$/, '').trim() : 'e.g. Surprised Pikachu'}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={120}
               />
-              <span>
-                <strong>Public in library</strong>
-                <small>Other users will be able to see and fork this media.</small>
-              </span>
             </label>
+
+            {/* Tags input */}
+            <div className="form-group">
+              <span>Tags (personal to your library)</span>
+              <div className="tags-input-container">
+                <Tag size={14} className="tags-icon" />
+                <div className="tags-chip-list">
+                  {tags.map((t) => (
+                    <span key={t} className="tag-chip">
+                      #{t}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(t)}
+                        className="remove-tag-btn"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    placeholder={tags.length === 0 ? 'Type tag and press Enter...' : 'Add another...'}
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleAddTag}
+                    className="tag-bare-input"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="options-row">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                />
+                <span>
+                  <strong>Public in library</strong>
+                  <small>Visible in Discover and can be forked by others.</small>
+                </span>
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={isNsfw}
+                  onChange={(e) => setIsNsfw(e.target.checked)}
+                />
+                <span>
+                  <strong>
+                    <ShieldAlert size={13} style={{ display: 'inline', verticalAlign: '-1px' }} /> NSFW / Sensitive
+                  </strong>
+                  <small>Allows party games to filter adult content.</small>
+                </span>
+              </label>
+            </div>
 
             <button
               type="submit"
@@ -253,4 +345,3 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
     </div>
   );
 }
-
