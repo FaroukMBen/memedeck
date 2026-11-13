@@ -9,6 +9,7 @@ interface MediaThumbnailProps {
   controls?: boolean;
   autoPlay?: boolean;
   loop?: boolean;
+  muted?: boolean;
   showBadge?: boolean;
   isDetailView?: boolean;
 }
@@ -21,6 +22,7 @@ export function MediaThumbnail({
   controls = false,
   autoPlay = false,
   loop = false,
+  muted = false,
   showBadge = true,
   isDetailView = false,
 }: MediaThumbnailProps) {
@@ -45,6 +47,8 @@ export function MediaThumbnail({
           controls={controls}
           autoPlay={autoPlay}
           loop={loop}
+          muted={muted}
+          playsInline
           preload="metadata"
           onError={() => setHasError(true)}
           className={isDetailView ? 'detail-media-player' : 'media-thumb-element'}
