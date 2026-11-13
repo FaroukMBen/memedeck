@@ -1,0 +1,29 @@
+# MemeDeck — Idées et Fonctionnalités (Won't Have / Would Have)
+
+Ce document répertorie les fonctionnalités, optimisations et pistes d'évolution mises de côté pour le moment afin de se concentrer sur le cœur du produit (MVP), mais qui pourront être intégrées ultérieurement.
+
+---
+
+## 1. Déduplication par Empreinte Cryptographique (SHA-256)
+- **Concept** : Calculer l'empreinte SHA-256 du fichier côté client avant l'upload via `crypto.subtle.digest('SHA-256', buffer)`.
+- **Mécanisme** : Interroger l'API avec le hash (`GET /api/v1/medias/by-hash/:hash`). Si le mème a déjà été uploadé par un autre utilisateur, ne pas renvoyer le fichier binaire sur le réseau et créer directement un `user_medias` (smart forking automatique).
+- **Statut** : Would Have / Later (mis de côté pour simplifier le flux d'upload initial).
+
+---
+
+## 2. Conversion Côté Serveur des GIFs en MP4 / WebM
+- **Concept** : Passerelle de transcodage serveur (via ffmpeg ou pipeline serverless) pour ré-encoder systématiquement les GIFs volumineux en flux vidéo MP4/WebM H.264/AV1 ultra-légers.
+- **Statut** : Would Have (pour l'instant, gestion directe via les balises vidéo / formats natifs).
+
+---
+
+## 3. Modération Automatique et Détection NSFW
+- **Concept** : Analyse automatique des mèmes uploadés via un modèle d'IA de vision pour filtrer les contenus inappropriés ou générer des tags automatiques (OCR du texte de mème).
+- **Statut** : Won't Have pour le MVP.
+
+---
+
+## 4. Recherche Sémantique / Vectorielle (pgvector)
+- **Concept** : Indexation des mèmes avec des embeddings (CLIP / SigLIP) pour permettre la recherche en langage naturel (ex: "chat surpris devant un écran").
+- **Statut** : Won't Have pour le MVP.
+
