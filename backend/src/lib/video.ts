@@ -72,6 +72,9 @@ export async function compressVideoOrGif(
   try {
     await fs.writeFile(inputPath, inputBuffer);
 
+    const scaleFilter =
+      "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos";
+
     const args: string[] = isGif
       ? [
           '-y',
@@ -80,13 +83,13 @@ export async function compressVideoOrGif(
           '-c:v',
           'libx264',
           '-crf',
-          '22',
+          '28',
           '-preset',
           'medium',
           '-pix_fmt',
           'yuv420p',
           '-vf',
-          "scale='min(1280,iw)':-2:flags=lanczos,pad=ceil(iw/2)*2:ceil(ih/2)*2",
+          scaleFilter,
           '-movflags',
           '+faststart',
           outputPath,
@@ -98,19 +101,21 @@ export async function compressVideoOrGif(
           '-c:v',
           'libx264',
           '-crf',
-          '21',
+          '28',
           '-preset',
           'medium',
           '-profile:v',
           'high',
           '-level',
           '4.1',
+          '-pix_fmt',
+          'yuv420p',
           '-vf',
-          "scale='min(1280,iw)':-2:flags=lanczos",
+          scaleFilter,
           '-c:a',
           'aac',
           '-b:a',
-          '128k',
+          '96k',
           '-movflags',
           '+faststart',
           outputPath,
@@ -120,7 +125,7 @@ export async function compressVideoOrGif(
       execFile(
         ffmpegBinary,
         args,
-        { timeout: 60000, maxBuffer: 10 * 1024 * 1024 },
+        { timeout: 90000, maxBuffer: 10 * 1024 * 1024 },
         (error: Error | null) => {
           if (error) reject(error);
           else resolve();
@@ -129,33 +134,23 @@ export async function compressVideoOrGif(
     });
 
     const outputBuffer = await fs.readFile(outputPath);
+    const finalSize = outputBuffer.length;
+    const savingsPercent = Math.round(((inputBuffer.length - finalSize) / inputBuffer.length) * 100);
 
-    const savingsPercent = Math.round(
-      ((inputBuffer.length - outputBuffer.length) / inputBuffer.length) * 100
+    console.log(
+      `[FFmpeg Transcode] ${filename}: ${(inputBuffer.length / (1024 * 1024)).toFixed(2)} MB -> ${(finalSize / (1024 * 1024)).toFixed(2)} MB (${savingsPercent}% saved)`
     );
 
-    // Use compressed version if it is smaller and provides meaningful reduction (>= 10%) or if it's a GIF
-    if (outputBuffer.length < inputBuffer.length && (isGif || savingsPercent >= 10)) {
-      return {
-        buffer: outputBuffer,
-        mimeType: 'video/mp4',
-        extension: 'mp4',
-        originalSize: inputBuffer.length,
-        compressedSize: outputBuffer.length,
-        wasCompressed: true,
-      };
-    }
-
-    // Otherwise, retain original
     return {
-      buffer: inputBuffer,
-      mimeType,
-      extension: inputExt,
+      buffer: outputBuffer,
+      mimeType: 'video/mp4',
+      extension: 'mp4',
       originalSize: inputBuffer.length,
-      compressedSize: inputBuffer.length,
-      wasCompressed: false,
+      compressedSize: finalSize,
+      wasCompressed: true,
     };
   } catch (err) {
+    console.warn(`[FFmpeg Transcode] Transcoding failed for ${filename}, falling back to original:`, err);
     // Graceful fallback to original file if compression fails
     return {
       buffer: inputBuffer,

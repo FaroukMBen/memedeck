@@ -112,5 +112,66 @@ describe('MemeDeck API', () => {
     expect(result.mimeType).toBe('image/png');
     expect(result.buffer.toString()).toBe('hello-image-png');
   });
+
+  it('compressVideoOrGif successfully compresses a video asset', async () => {
+    // Generate a quick synthetic raw video in memory or tmp
+    const { execFile } = await import('node:child_process');
+    const { promises: fs } = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const ffmpegStatic = await import('ffmpeg-static');
+    const ffmpegPath = typeof ffmpegStatic.default === 'string' ? ffmpegStatic.default : (ffmpegStatic as any);
+
+    const tmpIn = path.join(os.tmpdir(), `vitest-test-in-${Date.now()}.mp4`);
+    await new Promise<void>((resolve, reject) => {
+      execFile(ffmpegPath, ['-y', '-f', 'lavfi', '-i', 'testsrc2=size=720x1280:rate=30', '-t', '2', '-pix_fmt', 'yuv420p', tmpIn], (err) => {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    const rawBuffer = await fs.readFile(tmpIn);
+    await fs.unlink(tmpIn).catch(() => {});
+
+    const result = await compressVideoOrGif(rawBuffer, 'video/mp4', 'test-video.mp4');
+    console.log('Test video compression result:', {
+      originalSize: result.originalSize,
+      compressedSize: result.compressedSize,
+      wasCompressed: result.wasCompressed,
+      savings: Math.round(((result.originalSize - result.compressedSize) / result.originalSize) * 100) + '%'
+    });
+
+    expect(result.wasCompressed).toBe(true);
+    expect(result.compressedSize).toBeLessThan(result.originalSize);
+  }, 30000);
+
+  it('compressVideoOrGif actively optimizes low-resolution videos (480x480)', async () => {
+    const { execFile } = await import('node:child_process');
+    const { promises: fs } = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const ffmpegStatic = await import('ffmpeg-static');
+    const ffmpegPath = typeof ffmpegStatic.default === 'string' ? ffmpegStatic.default : (ffmpegStatic as any);
+
+    const tmpIn = path.join(os.tmpdir(), `vitest-test-lowres-${Date.now()}.mp4`);
+    await new Promise<void>((resolve, reject) => {
+      execFile(ffmpegPath, ['-y', '-f', 'lavfi', '-i', 'testsrc2=size=480x480:rate=30', '-t', '2', '-pix_fmt', 'yuv420p', tmpIn], (err) => {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    const rawBuffer = await fs.readFile(tmpIn);
+    await fs.unlink(tmpIn).catch(() => {});
+
+    const result = await compressVideoOrGif(rawBuffer, 'video/mp4', 'lowres-480.mp4');
+    console.log('Low-res 480x480 compression result:', {
+      originalSize: result.originalSize,
+      compressedSize: result.compressedSize,
+      wasCompressed: result.wasCompressed,
+      savings: Math.round(((result.originalSize - result.compressedSize) / result.originalSize) * 100) + '%'
+    });
+
+    expect(result.wasCompressed).toBe(true);
+    expect(result.compressedSize).toBeLessThan(result.originalSize);
+  }, 30000);
 });
 
