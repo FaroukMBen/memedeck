@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL UNIQUE,
+    username TEXT UNIQUE,
     is_library_public BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -59,8 +60,13 @@ CREATE INDEX IF NOT EXISTS idx_collection_items_user_media_id ON public.collecti
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.users (id, email, is_library_public)
-    VALUES (NEW.id, COALESCE(NEW.email, ''), false)
+    INSERT INTO public.users (id, email, username, is_library_public)
+    VALUES (
+        NEW.id,
+        COALESCE(NEW.email, ''),
+        COALESCE(NEW.raw_user_meta_data->>'username', split_part(COALESCE(NEW.email, ''), '@', 1)),
+        false
+    )
     ON CONFLICT (id) DO NOTHING;
     RETURN NEW;
 END;
