@@ -10,6 +10,15 @@ const collectionSchema = z.object({
   is_public: z.boolean(),
 });
 
+const collectionListItemSchema = collectionSchema.extend({
+  item_count: z.number().int().default(0),
+  previews: z
+    .array(z.object({ file_url: z.string(), file_type: z.string() }))
+    .default([]),
+});
+
+const MAX_COLLECTION_PREVIEWS = 4;
+
 const collectionMediaItemSchema = z.object({
   user_media_id: z.string().uuid(),
   media_id: z.string().uuid(),
@@ -92,7 +101,7 @@ export async function collectionsRoutes(app: FastifyInstance): Promise<void> {
         }),
         response: {
           200: z.object({
-            items: z.array(collectionSchema),
+            items: z.array(collectionListItemSchema),
           }),
           401: errorSchema,
           500: errorSchema,
@@ -129,7 +138,50 @@ export async function collectionsRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      return { items: data ?? [] };
+      const collections = data ?? [];
+      const summaries = new Map<
+        string,
+        { item_count: number; previews: { file_url: string; file_type: string }[] }
+      >();
+
+      // Item counts and a few cover previews, so the UI can render deck tiles
+      if (collections.length > 0) {
+        const { data: itemRows } = await supabaseAdmin
+          .from('collection_items')
+          .select(
+            `
+            collection_id,
+            user_medias!inner (
+              medias!inner (
+                file_url,
+                file_type
+              )
+            )
+          `
+          )
+          .in(
+            'collection_id',
+            collections.map((c) => c.id)
+          );
+
+        for (const row of (itemRows ?? []) as any[]) {
+          const summary = summaries.get(row.collection_id) ?? { item_count: 0, previews: [] };
+          summary.item_count += 1;
+          const media = row.user_medias?.medias;
+          if (media && summary.previews.length < MAX_COLLECTION_PREVIEWS) {
+            summary.previews.push({ file_url: media.file_url, file_type: media.file_type });
+          }
+          summaries.set(row.collection_id, summary);
+        }
+      }
+
+      return {
+        items: collections.map((c) => ({
+          ...c,
+          item_count: summaries.get(c.id)?.item_count ?? 0,
+          previews: summaries.get(c.id)?.previews ?? [],
+        })),
+      };
     }
   );
 
