@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS public.medias (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     file_url TEXT NOT NULL,
     file_type TEXT NOT NULL,
+    original_title TEXT,
     original_uploader_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    likes_count INT NOT NULL DEFAULT 0,
+    dislikes_count INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -26,6 +29,9 @@ CREATE TABLE IF NOT EXISTS public.user_medias (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     media_id UUID NOT NULL REFERENCES public.medias(id) ON DELETE CASCADE,
+    custom_title TEXT,
+    tags TEXT[] NOT NULL DEFAULT '{}',
+    is_nsfw BOOLEAN NOT NULL DEFAULT false,
     is_public BOOLEAN NOT NULL DEFAULT true,
     added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT user_medias_user_media_unique UNIQUE (user_id, media_id)
