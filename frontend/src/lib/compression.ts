@@ -13,9 +13,9 @@ export interface CompressionResult {
 
 export async function compressImageClientSide(
   file: File,
-  maxWidth = 1600,
-  maxHeight = 1600,
-  quality = 0.82
+  maxWidth = 1280,
+  maxHeight = 1280,
+  quality = 0.80
 ): Promise<CompressionResult> {
   // If not a static image (e.g. video or gif), do not transcode with canvas
   if (!file.type.startsWith('image/') || file.type === 'image/gif') {
@@ -29,8 +29,26 @@ export async function compressImageClientSide(
 
   return new Promise((resolve) => {
     const reader = new FileReader();
+    reader.onerror = () => {
+      resolve({
+        file,
+        originalSize: file.size,
+        compressedSize: file.size,
+        savingsPercent: 0,
+      });
+    };
+
     reader.onload = (e) => {
       const img = new Image();
+      img.onerror = () => {
+        resolve({
+          file,
+          originalSize: file.size,
+          compressedSize: file.size,
+          savingsPercent: 0,
+        });
+      };
+
       img.onload = () => {
         let width = img.naturalWidth;
         let height = img.naturalHeight;
