@@ -910,6 +910,8 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
                   file_type: z.string(),
                   original_title: z.string().nullable().optional(),
                   original_uploader_id: z.string().uuid().nullable(),
+                  likes_count: z.number().default(0),
+                  dislikes_count: z.number().default(0),
                   created_at: z.string(),
                 }),
               })
@@ -963,6 +965,8 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
             file_type,
             original_title,
             original_uploader_id,
+            likes_count,
+            dislikes_count,
             created_at
           )
         `

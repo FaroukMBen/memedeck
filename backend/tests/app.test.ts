@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
+import { compressVideoOrGif } from '../src/lib/video.js';
 
 describe('MemeDeck API', () => {
   let app: FastifyInstance;
@@ -101,6 +102,15 @@ describe('MemeDeck API', () => {
     });
 
     expect(res.statusCode).toBe(401);
+  });
+
+  it('compressVideoOrGif passes through non-video assets safely', async () => {
+    const fakeBuffer = Buffer.from('hello-image-png');
+    const result = await compressVideoOrGif(fakeBuffer, 'image/png', 'sample.png');
+
+    expect(result.wasCompressed).toBe(false);
+    expect(result.mimeType).toBe('image/png');
+    expect(result.buffer.toString()).toBe('hello-image-png');
   });
 });
 
