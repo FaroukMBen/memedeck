@@ -114,12 +114,16 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
                 id: z.string().uuid(),
                 user_id: z.string().uuid(),
                 media_id: z.string().uuid(),
+                custom_title: z.string().nullable().optional(),
+                tags: z.array(z.string()).default([]),
+                is_nsfw: z.boolean().default(false),
                 is_public: z.boolean(),
                 added_at: z.string(),
                 media: z.object({
                   id: z.string().uuid(),
                   file_url: z.string(),
                   file_type: z.string(),
+                  original_title: z.string().nullable().optional(),
                   original_uploader_id: z.string().uuid().nullable(),
                   created_at: z.string(),
                 }),
@@ -163,12 +167,16 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
           id,
           user_id,
           media_id,
+          custom_title,
+          tags,
+          is_nsfw,
           is_public,
           added_at,
           media:medias (
             id,
             file_url,
             file_type,
+            original_title,
             original_uploader_id,
             created_at
           )

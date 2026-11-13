@@ -9,7 +9,10 @@ export interface MediaRecord {
   id: string;
   file_url: string;
   file_type: string;
+  original_title: string | null;
   original_uploader_id: string | null;
+  likes_count: number;
+  dislikes_count: number;
   created_at: string;
 }
 
@@ -17,8 +20,18 @@ export interface UserMediaRecord {
   id: string;
   user_id: string;
   media_id: string;
+  custom_title: string | null;
+  tags: string[];
+  is_nsfw: boolean;
   is_public: boolean;
   added_at: string;
+}
+
+export interface MediaReactionRecord {
+  user_id: string;
+  media_id: string;
+  reaction_type: 1 | -1;
+  created_at: string;
 }
 
 export interface CollectionRecord {
