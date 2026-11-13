@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL UNIQUE,
     username TEXT UNIQUE,
+    avatar_url TEXT,
+    bio TEXT,
+    allow_friends_see_private BOOLEAN NOT NULL DEFAULT false,
+    allow_profile_comments BOOLEAN NOT NULL DEFAULT true,
     is_library_public BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -158,6 +162,39 @@ CREATE POLICY "Users can view items in own or public collections"
               AND (c.user_id = auth.uid() OR c.is_public = true)
         )
     );
+
+-- 6. Profile Comments table
+CREATE TABLE IF NOT EXISTS public.profile_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.profile_comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view comments" ON public.profile_comments FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can create comments" ON public.profile_comments FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "Authors and owners can delete comments" ON public.profile_comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = profile_user_id);
+
+-- 7. Friendships table
+CREATE TABLE IF NOT EXISTS public.friendships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    requester_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    addressee_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_friendship UNIQUE (requester_id, addressee_id),
+    CONSTRAINT check_not_self CHECK (requester_id <> addressee_id)
+);
+
+ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view friendships involving them" ON public.friendships FOR SELECT USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+CREATE POLICY "Users can send friend requests" ON public.friendships FOR INSERT WITH CHECK (auth.uid() = requester_id);
+CREATE POLICY "Involved users can update friendship" ON public.friendships FOR UPDATE USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+CREATE POLICY "Involved users can delete friendship" ON public.friendships FOR DELETE USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+
 
 CREATE POLICY "Users can manage items in own collections"
     ON public.collection_items FOR ALL
