@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
+import { hueFromString } from '../lib/hue';
 import {
   FolderHeart,
   Plus,
@@ -157,6 +158,8 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
                 setSelectedColId(null);
                 setDetails(null);
                 setRandomDrawResults(null);
+                // Counts and covers may have changed while inside the deck
+                fetchCollections();
               }}
               title="Back to Collections"
             >
@@ -232,20 +235,19 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
             <p>Go to your Library and click &quot;Add to Collection&quot; to build this deck.</p>
           </div>
         ) : (
-          <div className="media-grid">
+          <div className="lib-grid tiles">
             {details.items.map((item) => (
-              <div key={item.user_media_id} className="media-card">
-                <div className="media-card-thumb">
-                  <MediaThumbnail url={item.file_url} fileType={item.file_type} />
-                </div>
+              <div key={item.user_media_id} className="lib-tile static">
+                <MediaThumbnail url={item.file_url} fileType={item.file_type} />
                 {isOwner && (
-                  <div className="media-card-body">
+                  <div className="lib-tile-quick">
                     <button
-                      className="small-action-btn danger full-width"
+                      className="danger"
                       onClick={() => handleRemoveItem(item.user_media_id)}
+                      title="Remove from deck"
+                      aria-label="Remove from deck"
                     >
-                      <Trash2 size={13} />
-                      <span>Remove from deck</span>
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 )}
@@ -306,48 +308,63 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
           <Loader2 size={32} className="spin" />
           <p>Loading collections...</p>
         </div>
-      ) : collections.length === 0 ? (
-        <div className="empty-state-card">
-          <FolderHeart size={40} className="empty-icon" />
-          <h3>No collections found</h3>
-          <p>
-            {filterMine
-              ? 'You have not created any collections yet.'
-              : 'No public collections have been shared yet.'}
-          </p>
-          <button
-            className="add-media-btn"
-            onClick={() => {
-              if (!user) onRequireAuth();
-              else setIsCreateOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            <span>Create a Collection</span>
-          </button>
-        </div>
       ) : (
-        <div className="collections-grid">
-          {collections.map((col) => (
-            <div
-              key={col.id}
-              className="collection-card"
-              onClick={() => handleOpenCollection(col)}
+        <>
+          <div className="deck-grid">
+            <button
+              className="deck-tile deck-create"
+              onClick={() => {
+                if (!user) onRequireAuth();
+                else setIsCreateOpen(true);
+              }}
             >
-              <div className="collection-card-icon">
-                <FolderHeart size={28} />
-              </div>
+              <Plus size={30} />
+              <span>Create a new collection</span>
+            </button>
 
-              <div className="collection-card-content">
-                <h3>{col.title}</h3>
-                <span className={`privacy-pill small ${col.is_public ? 'public' : 'private'}`}>
-                  {col.is_public ? <Globe size={11} /> : <Lock size={11} />}
-                  <span>{col.is_public ? 'Public' : 'Private'}</span>
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            {collections.map((col) => {
+              const previews = col.previews ?? [];
+              return (
+                <button
+                  key={col.id}
+                  className="deck-tile"
+                  style={{ '--deck-hue': hueFromString(col.id) } as CSSProperties}
+                  onClick={() => handleOpenCollection(col)}
+                  disabled={loadingDetails}
+                >
+                  {previews.length > 0 && (
+                    <div className="deck-mosaic" aria-hidden="true">
+                      {previews.map((p, idx) =>
+                        p.file_type.startsWith('video/') ? (
+                          <video key={idx} src={p.file_url} preload="metadata" muted playsInline />
+                        ) : (
+                          <img key={idx} src={p.file_url} alt="" loading="lazy" />
+                        )
+                      )}
+                    </div>
+                  )}
+                  <div className="deck-shade" />
+                  <span className="deck-privacy" title={col.is_public ? 'Public deck' : 'Private deck'}>
+                    {col.is_public ? <Globe size={13} /> : <Lock size={13} />}
+                  </span>
+                  <div className="deck-label">
+                    <h3>{col.title}</h3>
+                    <span>( {col.item_count ?? 0} )</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {collections.length === 0 && (
+            <p className="deck-empty-hint">
+              <FolderHeart size={16} />
+              {filterMine
+                ? 'You have not created any collections yet.'
+                : 'No public collections have been shared yet.'}
+            </p>
+          )}
+        </>
       )}
 
       {/* Create Collection Modal */}
