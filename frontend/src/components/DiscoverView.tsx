@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { GitFork, Check, Loader2, RefreshCw, Plus, Compass, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { BookmarkPlus, Check, Loader2, RefreshCw, Plus, Compass, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { memedeckApi, type MediaItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
+import { AddToLibraryModal } from './AddToLibraryModal';
 import { MediaThumbnail } from './MediaThumbnail';
 
 interface DiscoverViewProps {
@@ -16,10 +17,9 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
   const [medias, setMedias] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
-  const [forkingId, setForkingId] = useState<string | null>(null);
-  const [forkedIds, setForkedIds] = useState<Set<string>>(new Set());
-  const [forkErrors, setForkErrors] = useState<Record<string, string>>({});
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [selectedMedia, setSelectedMedia] = useState<SelectedMediaContext | null>(null);
+  const [mediaToAddToLibrary, setMediaToAddToLibrary] = useState<MediaItem | null>(null);
 
   const fetchMedias = async () => {
     setLoading(true);
@@ -37,32 +37,6 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
   useEffect(() => {
     fetchMedias();
   }, [filter]);
-
-  const handleFork = async (media: MediaItem) => {
-    if (!user) {
-      onRequireAuth();
-      return;
-    }
-
-    setForkingId(media.id);
-    setForkErrors((prev) => {
-      const copy = { ...prev };
-      delete copy[media.id];
-      return copy;
-    });
-
-    try {
-      await memedeckApi.forkMedia(media.id);
-      setForkedIds((prev) => new Set(prev).add(media.id));
-    } catch (err: any) {
-      setForkErrors((prev) => ({
-        ...prev,
-        [media.id]: err.message ?? 'Failed to fork',
-      }));
-    } finally {
-      setForkingId(null);
-    }
-  };
 
   const handleReaction = async (e: React.MouseEvent, mediaId: string, currentReaction: 1 | -1 | null, targetType: 1 | -1) => {
     e.stopPropagation();
@@ -148,9 +122,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
       ) : (
         <div className="media-grid">
           {medias.map((item) => {
-            const isForked = forkedIds.has(item.id);
-            const isForking = forkingId === item.id;
-            const error = forkErrors[item.id];
+            const isAdded = addedIds.has(item.id);
             const title = item.original_title || 'Untitled Meme';
 
             return (
@@ -198,37 +170,36 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
                     </div>
                   </div>
 
-                  {error && <span className="card-error">{error}</span>}
-
-                  <button
-                    className={`fork-btn ${isForked ? 'forked' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFork(item);
-                    }}
-                    disabled={isForking || isForked}
-                  >
-                    {isForking ? (
-                      <>
-                        <Loader2 size={14} className="spin" />
-                        <span>Forking...</span>
-                      </>
-                    ) : isForked ? (
-                      <>
-                        <Check size={14} />
-                        <span>Forked</span>
-                      </>
-                    ) : (
-                      <>
-                        <GitFork size={14} />
-                        <span>Fork to Library</span>
-                      </>
-                    )}
-                  </button>
+                    <button
+                      className={`fork-btn ${isAdded ? 'forked' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!user) {
+                          onRequireAuth();
+                          return;
+                        }
+                        if (!isAdded) {
+                          setMediaToAddToLibrary(item);
+                        }
+                      }}
+                      title={isAdded ? 'In your library' : 'Add to your library'}
+                    >
+                      {isAdded ? (
+                        <>
+                          <Check size={14} />
+                          <span>In Library</span>
+                        </>
+                      ) : (
+                        <>
+                          <BookmarkPlus size={14} />
+                          <span>Add to Library</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       )}
 
@@ -238,7 +209,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
         onClose={() => setSelectedMedia(null)}
         onRequireAuth={onRequireAuth}
         onNavigateToUser={onNavigateToUser}
-        onForked={(id) => setForkedIds((prev) => new Set(prev).add(id))}
+        onForked={(id) => setAddedIds((prev) => new Set(prev).add(id))}
         onReactionUpdated={(id, likes, dislikes, reaction) => {
           setMedias((prev) =>
             prev.map((m) =>
@@ -253,6 +224,17 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
             )
           );
         }}
+      />
+
+      {/* Separate Dedicated Add to Library Dialog Window */}
+      <AddToLibraryModal
+        media={mediaToAddToLibrary}
+        isOpen={!!mediaToAddToLibrary}
+        onClose={() => setMediaToAddToLibrary(null)}
+        onAdded={(id) => {
+          setAddedIds((prev) => new Set(prev).add(id));
+        }}
+        onRequireAuth={onRequireAuth}
       />
     </div>
   );

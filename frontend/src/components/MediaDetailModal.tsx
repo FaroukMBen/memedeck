@@ -1,7 +1,7 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useState, useEffect, type KeyboardEvent } from 'react';
 import {
   X,
-  GitFork,
+  BookmarkPlus,
   Check,
   Globe,
   Lock,
@@ -24,6 +24,7 @@ import {
 import { memedeckApi, type MediaItem, type UserMediaItem, type CollectionItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { MediaThumbnail } from './MediaThumbnail';
+import { AddToLibraryModal } from './AddToLibraryModal';
 
 export interface SelectedMediaContext {
   media: MediaItem;
@@ -58,15 +59,13 @@ export function MediaDetailModal({
   onNavigateToUser,
 }: MediaDetailModalProps) {
   const { user } = useAuth();
-  const [forking, setForking] = useState(false);
-  const [forked, setForked] = useState(false);
   const [copied, setCopied] = useState(false);
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [colAddedMsg, setColAddedMsg] = useState(false);
 
-  // Fork customizations
-  const [forkTitle, setForkTitle] = useState('');
-  const [importTags, setImportTags] = useState(true);
+  // Add to Library state
+  const [addedToLib, setAddedToLib] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Edit Mode state
   const [isEditing, setIsEditing] = useState(selected?.initialEditMode ?? false);
@@ -84,6 +83,22 @@ export function MediaDetailModal({
     selected?.media.user_reaction ?? null
   );
   const [reacting, setReacting] = useState(false);
+
+  // Synchronize state whenever a media card is clicked/selected
+  useEffect(() => {
+    if (selected) {
+      setLikesCount(selected.media.likes_count ?? 0);
+      setDislikesCount(selected.media.dislikes_count ?? 0);
+      setUserReaction(selected.media.user_reaction ?? null);
+      setAddedToLib(false);
+      setIsAddModalOpen(false);
+      setIsEditing(selected.initialEditMode ?? false);
+      setEditTitle(selected.userMedia?.custom_title || selected.media.original_title || '');
+      setEditTags(selected.userMedia?.tags ?? []);
+      setEditIsPublic(selected.userMedia?.is_public ?? true);
+      setEditIsNsfw(selected.userMedia?.is_nsfw ?? false);
+    }
+  }, [selected]);
 
   if (!selected) return null;
 
@@ -113,27 +128,6 @@ export function MediaDetailModal({
     }
   };
 
-  const handleFork = async () => {
-    if (!user) {
-      onClose();
-      onRequireAuth?.();
-      return;
-    }
-
-    setForking(true);
-    try {
-      await memedeckApi.forkMedia(media.id, {
-        custom_title: forkTitle.trim() || undefined,
-        import_tags: importTags,
-      });
-      setForked(true);
-      onForked?.(media.id);
-    } catch (err: any) {
-      alert(err.message ?? 'Failed to fork media');
-    } finally {
-      setForking(false);
-    }
-  };
 
   const handleTogglePrivacy = async () => {
     if (!userMedia) return;
@@ -479,49 +473,30 @@ export function MediaDetailModal({
               <div className="detail-actions">
                 {/* If in Discover & not owned */}
                 {!userMedia && (
-                  <div className="fork-options-box">
-                    <input
-                      type="text"
-                      placeholder={media.original_title || 'Custom title in your library...'}
-                      value={forkTitle}
-                      onChange={(e) => setForkTitle(e.target.value)}
-                      className="fork-title-input"
-                    />
-
-                    <label className="checkbox-label" style={{ padding: '0.2rem 0' }}>
-                      <input
-                        type="checkbox"
-                        checked={importTags}
-                        onChange={(e) => setImportTags(e.target.checked)}
-                      />
-                      <span>
-                        <small>Import original tags into your library</small>
-                      </span>
-                    </label>
-
-                    <button
-                      className={`submit-btn ${forked ? 'forked' : ''}`}
-                      onClick={handleFork}
-                      disabled={forking || forked}
-                    >
-                      {forking ? (
-                        <>
-                          <Loader2 size={16} className="spin" />
-                          <span>Forking to Library...</span>
-                        </>
-                      ) : forked ? (
-                        <>
-                          <Check size={16} />
-                          <span>Forked to Library!</span>
-                        </>
-                      ) : (
-                        <>
-                          <GitFork size={16} />
-                          <span>Fork to My Library</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  <button
+                    className={`submit-btn ${addedToLib ? 'success' : ''}`}
+                    onClick={() => {
+                      if (!user) {
+                        onRequireAuth?.();
+                        return;
+                      }
+                      setIsAddModalOpen(true);
+                    }}
+                    disabled={addedToLib}
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    {addedToLib ? (
+                      <>
+                        <Check size={16} />
+                        <span>In Your Library</span>
+                      </>
+                    ) : (
+                      <>
+                        <BookmarkPlus size={16} />
+                        <span>Add to Library</span>
+                      </>
+                    )}
+                  </button>
                 )}
 
                 {/* If user owns or has it in library */}
@@ -588,6 +563,18 @@ export function MediaDetailModal({
           )}
         </div>
       </div>
+
+      {/* Separate Dedicated Add to Library Dialog Window */}
+      <AddToLibraryModal
+        media={media}
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onAdded={(id) => {
+          setAddedToLib(true);
+          onForked?.(id);
+        }}
+        onRequireAuth={() => onRequireAuth?.()}
+      />
     </div>
   );
 }

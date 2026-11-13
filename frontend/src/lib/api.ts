@@ -193,6 +193,21 @@ export const memedeckApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(options),
     }),
+  addToLibrary: (
+    mediaId: string,
+    options: {
+      custom_title?: string;
+      tags?: string[];
+      import_tags?: boolean;
+      is_public?: boolean;
+      is_nsfw?: boolean;
+    } = {}
+  ) =>
+    apiFetch<UserMediaItem>(`/api/v1/medias/${mediaId}/fork`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    }),
   getUserLibrary: (userId: string) =>
     apiFetch<{ items: UserMediaItem[] }>(`/api/v1/users/${userId}/library`),
   updateUserMedia: (
