@@ -8,9 +8,10 @@ import { MediaThumbnail } from './MediaThumbnail';
 interface DiscoverViewProps {
   onRequireAuth: () => void;
   onOpenUpload: () => void;
+  onNavigateToUser?: (userId: string) => void;
 }
 
-export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps) {
+export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: DiscoverViewProps) {
   const { user } = useAuth();
   const [medias, setMedias] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,6 +237,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload }: DiscoverViewProps)
         selected={selectedMedia}
         onClose={() => setSelectedMedia(null)}
         onRequireAuth={onRequireAuth}
+        onNavigateToUser={onNavigateToUser}
         onForked={(id) => setForkedIds((prev) => new Set(prev).add(id))}
         onReactionUpdated={(id, likes, dislikes, reaction) => {
           setMedias((prev) =>

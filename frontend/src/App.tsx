@@ -15,12 +15,14 @@ import { UploadModal } from './components/UploadModal';
 import { DiscoverView } from './components/DiscoverView';
 import { LibraryView } from './components/LibraryView';
 import { CollectionsView } from './components/CollectionsView';
+import { ProfileView } from './components/ProfileView';
 
-type Tab = 'discover' | 'library' | 'collections';
+type Tab = 'discover' | 'library' | 'collections' | 'profile';
 
 function AppContent() {
   const { user, username, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('discover');
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -31,6 +33,11 @@ function AppContent() {
       .then(() => setApiStatus('online'))
       .catch(() => setApiStatus('offline'));
   }, []);
+
+  const handleNavigateToUser = (targetUserId: string) => {
+    setProfileUserId(targetUserId);
+    setActiveTab('profile');
+  };
 
   return (
     <div className="app-shell">
@@ -91,14 +98,23 @@ function AppContent() {
 
           {/* User Authentication state */}
           {user ? (
-            <div className="user-profile-badge">
+            <div
+              className={`user-profile-badge clickable ${
+                activeTab === 'profile' && profileUserId === user.id ? 'active' : ''
+              }`}
+              onClick={() => handleNavigateToUser(user.id)}
+              title="View your Creator Profile"
+            >
               <span className="user-avatar-circle">
                 {(username?.[0] ?? 'U').toUpperCase()}
               </span>
               <span>{username}</span>
               <button
                 className="signout-btn"
-                onClick={() => signOut()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  signOut();
+                }}
                 title="Sign Out"
                 aria-label="Sign Out"
               >
@@ -142,6 +158,7 @@ function AppContent() {
                 setIsUploadModalOpen(true);
               }
             }}
+            onNavigateToUser={handleNavigateToUser}
           />
         )}
 
@@ -161,6 +178,14 @@ function AppContent() {
         {activeTab === 'collections' && (
           <CollectionsView
             onRequireAuth={() => setIsAuthModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'profile' && profileUserId && (
+          <ProfileView
+            userId={profileUserId}
+            onRequireAuth={() => setIsAuthModalOpen(true)}
+            onNavigateToUser={handleNavigateToUser}
           />
         )}
       </main>

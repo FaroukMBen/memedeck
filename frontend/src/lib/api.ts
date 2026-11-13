@@ -48,11 +48,67 @@ export interface HealthResponse {
   timestamp: string;
 }
 
-export interface UserProfile {
+export interface CurrentUserProfile {
   id: string;
   email: string;
   username: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  allow_friends_see_private: boolean;
+  allow_profile_comments: boolean;
   is_library_public: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  allow_friends_see_private: boolean;
+  allow_profile_comments: boolean;
+  is_library_public: boolean;
+  created_at?: string | null;
+  stats: {
+    published_count: number;
+    library_count: number;
+    total_likes: number;
+    total_dislikes: number;
+  };
+  friendship_status: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'self';
+  is_own_profile: boolean;
+}
+
+export interface PublicationItem {
+  id: string;
+  user_media_id?: string | null;
+  file_url: string;
+  file_type: string;
+  original_title?: string | null;
+  custom_title?: string | null;
+  tags: string[];
+  is_nsfw: boolean;
+  is_public: boolean;
+  likes_count: number;
+  dislikes_count: number;
+  created_at: string;
+}
+
+export interface ProfileComment {
+  id: string;
+  profile_user_id: string;
+  author_id: string;
+  author_username: string | null;
+  author_avatar_url: string | null;
+  content: string;
+  created_at: string;
+  can_delete: boolean;
+}
+
+export interface ProfileCommentsResponse {
+  comments: ProfileComment[];
+  total: number;
+  page: number;
+  total_pages: number;
 }
 
 export interface MediaItem {
@@ -228,5 +284,76 @@ export const memedeckApi = {
 
     return response.json();
   },
+
+  // Profile & User endpoints
+  getUserProfile: (userId: string) =>
+    apiFetch<UserProfile>(`/api/v1/users/${userId}/profile`),
+  getUserPublications: (userId: string) =>
+    apiFetch<{ items: PublicationItem[] }>(`/api/v1/users/${userId}/publications`),
+  updateCurrentUserProfile: (payload: {
+    username?: string;
+    avatar_url?: string | null;
+    bio?: string | null;
+    allow_friends_see_private?: boolean;
+    allow_profile_comments?: boolean;
+    is_library_public?: boolean;
+  }) =>
+    apiFetch<CurrentUserProfile>('/api/v1/users/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const authHeaders = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/users/me/avatar`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message ?? `Avatar upload failed (${response.status})`);
+    }
+
+    return response.json();
+  },
+
+  // Profile Comments
+  getProfileComments: (userId: string, page = 1, limit = 10) =>
+    apiFetch<ProfileCommentsResponse>(
+      `/api/v1/users/${userId}/comments?page=${page}&limit=${limit}`
+    ),
+  postProfileComment: (userId: string, content: string) =>
+    apiFetch<ProfileComment>(`/api/v1/users/${userId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    }),
+  deleteProfileComment: (userId: string, commentId: string) =>
+    apiFetch<null>(`/api/v1/users/${userId}/comments/${commentId}`, {
+      method: 'DELETE',
+    }),
+
+  // Friendships
+  sendFriendRequest: (userId: string) =>
+    apiFetch<{ status: 'pending_sent' | 'friends'; message: string }>(
+      `/api/v1/users/${userId}/friend-request`,
+      { method: 'POST' }
+    ),
+  acceptFriendRequest: (userId: string) =>
+    apiFetch<{ success: boolean; message: string }>(
+      `/api/v1/users/${userId}/friend-accept`,
+      { method: 'POST' }
+    ),
+  removeFriendship: (userId: string) =>
+    apiFetch<null>(`/api/v1/users/${userId}/friendship`, {
+      method: 'DELETE',
+    }),
 };
 

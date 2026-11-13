@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   Pencil,
   Save,
+  User,
 } from 'lucide-react';
 import { memedeckApi, type MediaItem, type UserMediaItem, type CollectionItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -41,6 +42,7 @@ interface MediaDetailModalProps {
   onDeleted?: (userMediaId: string) => void;
   onReactionUpdated?: (mediaId: string, likes: number, dislikes: number, reaction: 1 | -1 | null) => void;
   onUserMediaUpdated?: (updated: UserMediaItem) => void;
+  onNavigateToUser?: (userId: string) => void;
 }
 
 export function MediaDetailModal({
@@ -53,6 +55,7 @@ export function MediaDetailModal({
   onDeleted,
   onReactionUpdated,
   onUserMediaUpdated,
+  onNavigateToUser,
 }: MediaDetailModalProps) {
   const { user } = useAuth();
   const [forking, setForking] = useState(false);
@@ -456,6 +459,21 @@ export function MediaDetailModal({
                     <span>{copied ? 'Link copied!' : 'Copy asset URL'}</span>
                   </button>
                 </div>
+
+                {media.original_uploader_id && onNavigateToUser && (
+                  <div className="meta-item" style={{ marginTop: '0.2rem' }}>
+                    <button
+                      className="creator-profile-link-btn"
+                      onClick={() => {
+                        onClose();
+                        onNavigateToUser(media.original_uploader_id!);
+                      }}
+                    >
+                      <User size={13} />
+                      <span>View Creator Profile</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="detail-actions">
