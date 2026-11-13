@@ -11,19 +11,13 @@ Ce document répertorie les fonctionnalités, optimisations et pistes d'évoluti
 
 ---
 
-## 2. Conversion Côté Serveur des GIFs en MP4 / WebM
-- **Concept** : Passerelle de transcodage serveur (via ffmpeg ou pipeline serverless) pour ré-encoder systématiquement les GIFs volumineux en flux vidéo MP4/WebM H.264/AV1 ultra-légers.
-- **Statut** : Would Have (pour l'instant, gestion directe via les balises vidéo / formats natifs).
-
----
-
-## 3. Modération Automatique et Détection NSFW
+## 2. Modération Automatique et Détection NSFW
 - **Concept** : Analyse automatique des mèmes uploadés via un modèle d'IA de vision pour filtrer les contenus inappropriés ou générer des tags automatiques (OCR du texte de mème).
 - **Statut** : Won't Have pour le MVP.
 
 ---
 
-## 4. Recherche Sémantique / Vectorielle (pgvector)
+## 3. Recherche Sémantique / Vectorielle (pgvector)
 - **Concept** : Indexation des mèmes avec des embeddings (CLIP / SigLIP) pour permettre la recherche en langage naturel (ex: "chat surpris devant un écran").
 - **Statut** : Won't Have pour le MVP.
 

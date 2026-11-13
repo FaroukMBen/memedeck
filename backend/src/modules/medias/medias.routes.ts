@@ -4,6 +4,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { supabaseAdmin } from '../../lib/supabase.js';
+import { compressVideoOrGif } from '../../lib/video.js';
 
 const mediaSchema = z.object({
   id: z.string().uuid(),
@@ -212,14 +213,16 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
       const resolvedTitle = title?.trim() || fallbackTitle;
       const resolvedTags = parseTags(tags);
 
-      const ext = sanitizeExtension(file.filename);
+      const rawBuffer = await file.toBuffer();
+      const processed = await compressVideoOrGif(rawBuffer, file.mimetype, file.filename);
+
+      const ext = processed.extension;
       const storagePath = `${userId}/${randomUUID()}.${ext}`;
-      const buffer = await file.toBuffer();
 
       const { error: uploadError } = await supabaseAdmin.storage
         .from(env.SUPABASE_STORAGE_BUCKET)
-        .upload(storagePath, buffer, {
-          contentType: file.mimetype,
+        .upload(storagePath, processed.buffer, {
+          contentType: processed.mimeType,
           upsert: false,
         });
 
@@ -238,7 +241,7 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         .from('medias')
         .insert({
           file_url: publicUrlData.publicUrl,
-          file_type: file.mimetype,
+          file_type: processed.mimeType,
           original_title: resolvedTitle,
           original_uploader_id: userId,
           likes_count: 0,
