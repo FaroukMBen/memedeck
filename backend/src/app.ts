@@ -12,6 +12,7 @@ import { healthRoutes } from './modules/health/health.routes.js';
 import { usersRoutes } from './modules/users/users.routes.js';
 import { mediasRoutes } from './modules/medias/medias.routes.js';
 import { collectionsRoutes } from './modules/collections/collections.routes.js';
+import { socialRoutes } from './modules/social/social.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -67,6 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(usersRoutes);
   await app.register(mediasRoutes);
   await app.register(collectionsRoutes);
+  await app.register(socialRoutes);
 
   return app;
 }
