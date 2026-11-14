@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import {
   BookmarkPlus,
   Check,
@@ -13,13 +13,14 @@ import {
   ThumbsDown,
   X,
 } from 'lucide-react';
-import { memedeckApi, type MediaItem } from '../lib/api';
+import { memedeckApi, type ActivityItem, type MediaItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../context/FeedbackContext';
 import { hueFromString } from '../lib/hue';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
 import { AddToLibraryModal } from './AddToLibraryModal';
 import { MediaThumbnail } from './MediaThumbnail';
+import { ActivityList } from './ActivityList';
 
 interface DiscoverViewProps {
   onRequireAuth: () => void;
@@ -28,10 +29,13 @@ interface DiscoverViewProps {
 }
 
 type FeedTab = 'new' | 'top';
+type TypeFilter = 'all' | 'image' | 'video';
 
+const PAGE_SIZE = 24;
 const FEATURED_COUNT = 5;
 const FEATURED_ROTATE_MS = 6000;
 const MAX_TAG_TILES = 8;
+const SEARCH_DEBOUNCE_MS = 350;
 
 function score(item: MediaItem): number {
   return item.likes_count - item.dislikes_count;
@@ -44,67 +48,110 @@ function titleOf(item: MediaItem): string {
 export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: DiscoverViewProps) {
   const { user } = useAuth();
   const { notify } = useFeedback();
+
+  // Feed (sorted, searched and paginated by the server)
   const [medias, setMedias] = useState<MediaItem[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [filter, setFilter] = useState<TypeFilter>('all');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [feedTab, setFeedTab] = useState<FeedTab>('new');
   const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const requestId = useRef(0);
+
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [selectedMedia, setSelectedMedia] = useState<SelectedMediaContext | null>(null);
   const [mediaToAddToLibrary, setMediaToAddToLibrary] = useState<MediaItem | null>(null);
 
-  // Tag tiles come from the unfiltered feed so they don't vanish once a tag is picked
+  // Home shelves, loaded once: featured carousel, tag tiles, friends activity
+  const [featured, setFeatured] = useState<MediaItem[]>([]);
   const [tagTiles, setTagTiles] = useState<[string, number][]>([]);
-
-  // Featured carousel
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [featuredIndex, setFeaturedIndex] = useState(0);
   const [featuredPaused, setFeaturedPaused] = useState(false);
 
-  const fetchMedias = async () => {
-    setLoading(true);
-    try {
-      const typeParam = filter === 'all' ? undefined : filter;
-      const res = await memedeckApi.getPublicMedias(typeParam, activeTag ?? undefined);
-      setMedias(res.items);
+  const isInLibrary = (item: MediaItem) => item.in_library || addedIds.has(item.id);
 
-      if (!activeTag) {
-        const tagCounts = new Map<string, number>();
-        for (const item of res.items) {
-          for (const tag of item.tags ?? []) {
-            tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-          }
-        }
-        setTagTiles(
-          [...tagCounts.entries()]
-            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-            .slice(0, MAX_TAG_TILES)
-        );
-      }
-    } catch {
-      setMedias([]);
+  // Debounce typing before it becomes a server query
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const fetchPage = async (offset: number) => {
+    const id = ++requestId.current;
+    if (offset === 0) setLoading(true);
+    else setLoadingMore(true);
+
+    try {
+      const res = await memedeckApi.getPublicMedias({
+        fileType: filter === 'all' ? undefined : filter,
+        tag: activeTag ?? undefined,
+        sort: feedTab,
+        q: query || undefined,
+        limit: PAGE_SIZE,
+        offset,
+      });
+      // A newer request (filters changed meanwhile) supersedes this one
+      if (id !== requestId.current) return;
+      setMedias((prev) => (offset === 0 ? res.items : [...prev, ...res.items]));
+      setHasMore(res.has_more);
+    } catch (err: any) {
+      if (id !== requestId.current) return;
+      if (offset === 0) setMedias([]);
+      setHasMore(false);
+      notify(err.message ?? 'Failed to load memes', 'error');
     } finally {
-      setLoading(false);
+      if (id === requestId.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchMedias();
-  }, [filter, activeTag]);
+    fetchPage(0);
+  }, [filter, activeTag, feedTab, query, user?.id]);
 
-  const isBrowsing = activeTag !== null || search.trim() !== '';
+  const fetchShelves = async () => {
+    try {
+      const res = await memedeckApi.getPublicMedias({ sort: 'top', limit: 60 });
+      setFeatured(res.items.slice(0, FEATURED_COUNT));
 
-  const featured = useMemo(
-    () =>
-      [...medias]
-        .sort(
-          (a, b) =>
-            score(b) - score(a) ||
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-        .slice(0, FEATURED_COUNT),
-    [medias]
-  );
+      const tagCounts = new Map<string, number>();
+      for (const item of res.items) {
+        for (const tag of item.tags ?? []) {
+          tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+        }
+      }
+      setTagTiles(
+        [...tagCounts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, MAX_TAG_TILES)
+      );
+    } catch {
+      setFeatured([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchShelves();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) {
+      setActivity([]);
+      return;
+    }
+    memedeckApi
+      .getFeed(8)
+      .then((res) => setActivity(res.items))
+      .catch(() => setActivity([]));
+  }, [user?.id]);
+
+  const isBrowsing = activeTag !== null || query !== '';
   const showFeatured = !isBrowsing && featured.length >= 3;
   const featuredItem = featured[featuredIndex % Math.max(featured.length, 1)];
 
@@ -117,21 +164,19 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
     return () => clearInterval(timer);
   }, [showFeatured, featuredPaused, featured.length, selectedMedia, mediaToAddToLibrary]);
 
-  const feedItems = useMemo(() => {
-    const q = search.trim().toLowerCase().replace(/^#/, '');
-    const list = q
-      ? medias.filter(
-          (m) =>
-            titleOf(m).toLowerCase().includes(q) ||
-            (m.tags ?? []).some((t) => t.toLowerCase().includes(q))
-        )
-      : [...medias];
-
-    if (feedTab === 'top') {
-      list.sort((a, b) => score(b) - score(a));
-    }
-    return list;
-  }, [medias, search, feedTab]);
+  const applyReaction = (
+    mediaId: string,
+    likes: number,
+    dislikes: number,
+    reaction: 1 | -1 | null
+  ) => {
+    const patch = (m: MediaItem) =>
+      m.id === mediaId
+        ? { ...m, likes_count: likes, dislikes_count: dislikes, user_reaction: reaction }
+        : m;
+    setMedias((prev) => prev.map(patch));
+    setFeatured((prev) => prev.map(patch));
+  };
 
   const requestAdd = (e: MouseEvent, item: MediaItem) => {
     e.stopPropagation();
@@ -139,7 +184,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
       onRequireAuth();
       return;
     }
-    if (!addedIds.has(item.id)) {
+    if (!isInLibrary(item)) {
       setMediaToAddToLibrary(item);
     }
   };
@@ -159,35 +204,25 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
     const nextType = currentReaction === targetType ? 0 : targetType;
     try {
       const res = await memedeckApi.reactToMedia(mediaId, nextType);
-      setMedias((prev) =>
-        prev.map((m) =>
-          m.id === mediaId
-            ? {
-                ...m,
-                likes_count: res.likes_count,
-                dislikes_count: res.dislikes_count,
-                user_reaction: res.user_reaction,
-              }
-            : m
-        )
-      );
+      applyReaction(mediaId, res.likes_count, res.dislikes_count, res.user_reaction);
     } catch (err: any) {
       notify(err.message ?? 'Failed to vote', 'error');
     }
   };
 
   const addButton = (item: MediaItem) => {
-    const isAdded = addedIds.has(item.id);
+    const owned = isInLibrary(item);
     return (
       <button
-        className={`fork-btn ${isAdded ? 'forked' : ''}`}
+        className={`fork-btn ${owned ? 'forked' : ''}`}
         onClick={(e) => requestAdd(e, item)}
-        title={isAdded ? 'In your library' : 'Add to your library'}
+        disabled={owned}
+        title={owned ? 'This meme is already in your library' : 'Add to your library'}
       >
-        {isAdded ? (
+        {owned ? (
           <>
             <Check size={14} />
-            <span>In Library</span>
+            <span>Already in your library</span>
           </>
         ) : (
           <>
@@ -198,6 +233,9 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
       </button>
     );
   };
+
+  const openDetail = (item: MediaItem) =>
+    setSelectedMedia({ media: { ...item, in_library: isInLibrary(item) } });
 
   return (
     <div className="view-container">
@@ -215,20 +253,27 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
             <Search size={15} />
             <input
               type="search"
-              placeholder="Search title or tag"
+              placeholder="Search all public memes"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search public memes"
             />
           </div>
-          <button className="icon-btn" onClick={fetchMedias} title="Refresh feed">
+          <button
+            className="icon-btn"
+            onClick={() => {
+              fetchPage(0);
+              fetchShelves();
+            }}
+            title="Refresh feed"
+          >
             <RefreshCw size={16} />
           </button>
         </div>
       </div>
 
       {/* Featured carousel */}
-      {!loading && showFeatured && featuredItem && (
+      {showFeatured && featuredItem && (
         <section className="shelf">
           <h3 className="shelf-title">Featured &amp; Popular</h3>
           <div
@@ -246,15 +291,12 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
               <ChevronLeft size={22} />
             </button>
 
-            <div
-              className="featured-card"
-              key={featuredItem.id}
-              onClick={() => setSelectedMedia({ media: featuredItem })}
-            >
+            <div className="featured-card" key={featuredItem.id} onClick={() => openDetail(featuredItem)}>
               <div className="featured-media">
                 <MediaThumbnail
                   url={featuredItem.file_url}
                   fileType={featuredItem.file_type}
+                  sourceFormat={featuredItem.source_format}
                   autoPlay
                   loop
                   muted
@@ -316,6 +358,14 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
               />
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Friends and following */}
+      {!isBrowsing && activity.length > 0 && (
+        <section className="shelf">
+          <h3 className="shelf-title">From your circle</h3>
+          <ActivityList items={activity} onNavigateToUser={onNavigateToUser} />
         </section>
       )}
 
@@ -401,7 +451,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
             <Loader2 size={32} className="spin" />
             <p>Loading community media...</p>
           </div>
-        ) : medias.length === 0 && !isBrowsing ? (
+        ) : medias.length === 0 && !isBrowsing && filter === 'all' ? (
           <div className="empty-state-card">
             <Compass size={40} className="empty-icon" />
             <h3>No public memes yet</h3>
@@ -411,98 +461,112 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
               <span>Upload the First Meme</span>
             </button>
           </div>
-        ) : feedItems.length === 0 ? (
+        ) : medias.length === 0 ? (
           <div className="empty-state-card">
             <Search size={36} className="empty-icon" />
             <h3>Nothing matches</h3>
-            <p>Try another tag or search term.</p>
+            <p>Try another tag, type or search term.</p>
             <button
               className="small-action-btn"
               onClick={() => {
                 setActiveTag(null);
                 setSearch('');
+                setFilter('all');
               }}
             >
               Clear filters
             </button>
           </div>
         ) : (
-          <div className="media-grid">
-            {feedItems.map((item) => {
-              const title = titleOf(item);
+          <>
+            <div className="media-grid">
+              {medias.map((item) => {
+                const title = titleOf(item);
 
-              return (
-                <div
-                  key={item.id}
-                  className="media-card"
-                  onClick={() => setSelectedMedia({ media: item })}
-                >
-                  <div className="media-card-thumb">
-                    <MediaThumbnail url={item.file_url} fileType={item.file_type} />
-                  </div>
-
-                  <div className="media-card-body">
-                    <h4 className="card-meme-title" title={title}>
-                      {title}
-                    </h4>
-
-                    <div className="media-card-meta">
-                      <span className="media-date">
-                        {new Date(item.created_at).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-
-                      {/* Like / Dislike reactions */}
-                      <div className="card-reactions-bar">
-                        <button
-                          className={`mini-vote-btn like ${item.user_reaction === 1 ? 'active' : ''}`}
-                          onClick={(e) => handleReaction(e, item.id, item.user_reaction, 1)}
-                          title="Like"
-                        >
-                          <ThumbsUp size={12} />
-                          <span>{item.likes_count}</span>
-                        </button>
-
-                        <button
-                          className={`mini-vote-btn dislike ${item.user_reaction === -1 ? 'active' : ''}`}
-                          onClick={(e) => handleReaction(e, item.id, item.user_reaction, -1)}
-                          title="Dislike"
-                        >
-                          <ThumbsDown size={12} />
-                          <span>{item.dislikes_count}</span>
-                        </button>
-                      </div>
+                return (
+                  <div key={item.id} className="media-card" onClick={() => openDetail(item)}>
+                    <div className="media-card-thumb">
+                      <MediaThumbnail
+                        url={item.file_url}
+                        fileType={item.file_type}
+                        sourceFormat={item.source_format}
+                      />
                     </div>
 
-                    {item.tags && item.tags.length > 0 && (
-                      <div className="card-tag-chips">
-                        {item.tags.slice(0, 3).map((t) => (
-                          <button
-                            key={t}
-                            className="card-tag-pill clickable"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveTag(t);
-                            }}
-                            title={`Browse #${t}`}
-                          >
-                            #{t}
-                          </button>
-                        ))}
-                        {item.tags.length > 3 && (
-                          <span className="card-tag-more">+{item.tags.length - 3}</span>
-                        )}
-                      </div>
-                    )}
+                    <div className="media-card-body">
+                      <h4 className="card-meme-title" title={title}>
+                        {title}
+                      </h4>
 
-                    {addButton(item)}
+                      <div className="media-card-meta">
+                        <span className="media-date">
+                          {new Date(item.created_at).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+
+                        {/* Like / Dislike reactions */}
+                        <div className="card-reactions-bar">
+                          <button
+                            className={`mini-vote-btn like ${item.user_reaction === 1 ? 'active' : ''}`}
+                            onClick={(e) => handleReaction(e, item.id, item.user_reaction, 1)}
+                            title="Like"
+                          >
+                            <ThumbsUp size={12} />
+                            <span>{item.likes_count}</span>
+                          </button>
+
+                          <button
+                            className={`mini-vote-btn dislike ${item.user_reaction === -1 ? 'active' : ''}`}
+                            onClick={(e) => handleReaction(e, item.id, item.user_reaction, -1)}
+                            title="Dislike"
+                          >
+                            <ThumbsDown size={12} />
+                            <span>{item.dislikes_count}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {item.tags && item.tags.length > 0 && (
+                        <div className="card-tag-chips">
+                          {item.tags.slice(0, 3).map((t) => (
+                            <button
+                              key={t}
+                              className="card-tag-pill clickable"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveTag(t);
+                              }}
+                              title={`Browse #${t}`}
+                            >
+                              #{t}
+                            </button>
+                          ))}
+                          {item.tags.length > 3 && (
+                            <span className="card-tag-more">+{item.tags.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {addButton(item)}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+
+            {hasMore && (
+              <button
+                className="small-action-btn load-more-btn"
+                onClick={() => fetchPage(medias.length)}
+                disabled={loadingMore}
+              >
+                {loadingMore ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}
+                <span>{loadingMore ? 'Loading...' : 'Load more'}</span>
+              </button>
+            )}
+          </>
         )}
       </section>
 
@@ -513,20 +577,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
         onRequireAuth={onRequireAuth}
         onNavigateToUser={onNavigateToUser}
         onForked={(id) => setAddedIds((prev) => new Set(prev).add(id))}
-        onReactionUpdated={(id, likes, dislikes, reaction) => {
-          setMedias((prev) =>
-            prev.map((m) =>
-              m.id === id
-                ? {
-                    ...m,
-                    likes_count: likes,
-                    dislikes_count: dislikes,
-                    user_reaction: reaction,
-                  }
-                : m
-            )
-          );
-        }}
+        onReactionUpdated={applyReaction}
       />
 
       {/* Separate Dedicated Add to Library Dialog Window */}
