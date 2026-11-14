@@ -14,6 +14,7 @@ import {
   Columns3,
   FolderHeart,
   Hash,
+  Zap,
   X,
 } from 'lucide-react';
 import {
@@ -37,6 +38,18 @@ type ViewMode = 'tiles' | 'mosaic';
 
 const VIEW_MODE_KEY = 'memedeck.library.viewMode';
 const MAX_SIDEBAR_TAGS = 12;
+const SHELVES_KEY = 'memedeck.library.shelves';
+const SHELF_SIZE = 12;
+
+/** Shelf ids: 'recent', 'top', or 'col:<collection id>' */
+function readShelves(): string[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SHELVES_KEY) ?? 'null');
+    return Array.isArray(stored) ? stored.filter((s) => typeof s === 'string') : ['recent'];
+  } catch {
+    return ['recent'];
+  }
+}
 
 const SORT_OPTIONS: SelectOption<SortKey>[] = [
   { value: 'added', label: 'Date added' },
@@ -77,6 +90,10 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
   // Members of the collection currently selected in the sidebar
   const [colMembers, setColMembers] = useState<Set<string> | null>(null);
   const [colLoading, setColLoading] = useState(false);
+
+  // Shelves pinned above the grid, and the members of collection shelves
+  const [shelves, setShelves] = useState<string[]>(readShelves);
+  const [shelfMembers, setShelfMembers] = useState<Record<string, Set<string>>>({});
 
   const refreshCollections = async () => {
     try {
@@ -133,6 +150,37 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
       cancelled = true;
     };
   }, [filter]);
+
+  // Load the members of every collection used as a shelf
+  useEffect(() => {
+    const wanted = shelves.filter((s) => s.startsWith('col:')).map((s) => s.slice(4));
+    const missing = wanted.filter((id) => !shelfMembers[id]);
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      missing.map((id) =>
+        memedeckApi
+          .getCollectionDetails(id)
+          .then((res) => [id, new Set(res.items.map((i) => i.user_media_id))] as const)
+          .catch(() => [id, new Set<string>()] as const)
+      )
+    ).then((entries) => {
+      if (!cancelled) setShelfMembers((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [shelves]);
+
+  const saveShelves = (next: string[]) => {
+    setShelves(next);
+    try {
+      localStorage.setItem(SHELVES_KEY, JSON.stringify(next));
+    } catch {
+      /* shelves just won't persist */
+    }
+  };
 
   const changeViewMode = (mode: ViewMode) => {
     setViewMode(mode);
@@ -222,6 +270,45 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
     });
   }, [validItems, filter, colMembers, search, sortKey]);
 
+  // Shelves only show on the unfiltered library, above the full grid
+  const showShelves = filter === 'all' && search.trim() === '';
+
+  const shelfRows = useMemo(
+    () =>
+      shelves.flatMap((id) => {
+        if (id === 'recent') {
+          const recent = [...validItems].sort(
+            (a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
+          );
+          return [{ id, title: 'Recently added', items: recent.slice(0, SHELF_SIZE) }];
+        }
+        if (id === 'top') {
+          const top = [...validItems]
+            .filter((i) => (i.media?.likes_count ?? 0) > 0)
+            .sort((a, b) => (b.media?.likes_count ?? 0) - (a.media?.likes_count ?? 0));
+          return [{ id, title: 'Most liked', items: top.slice(0, SHELF_SIZE) }];
+        }
+        // A collection shelf disappears if its collection was deleted
+        const col = collections.find((c) => `col:${c.id}` === id);
+        if (!col) return [];
+        const members = shelfMembers[col.id];
+        return [
+          {
+            id,
+            title: col.title,
+            items: members ? validItems.filter((i) => members.has(i.id)).slice(0, SHELF_SIZE) : [],
+          },
+        ];
+      }),
+    [shelves, validItems, collections, shelfMembers]
+  );
+
+  const shelfOptions: SelectOption<string>[] = [
+    { value: 'recent', label: 'Recently added' },
+    { value: 'top', label: 'Most liked' },
+    ...collections.map((c) => ({ value: `col:${c.id}`, label: `Collection: ${c.title}` })),
+  ].filter((option) => !shelves.includes(option.value));
+
   const filterLabel = (() => {
     if (filter === 'image') return 'Images';
     if (filter === 'video') return 'Videos & GIFs';
@@ -291,7 +378,12 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
             <span className="lib-nav-empty">No collections yet</span>
           ) : (
             collections.map((col) =>
-              navItem(`col:${col.id}`, <FolderHeart size={15} />, col.title, col.item_count)
+              navItem(
+                `col:${col.id}`,
+                col.rule ? <Zap size={15} /> : <FolderHeart size={15} />,
+                col.title,
+                col.item_count
+              )
             )
           )}
         </div>
@@ -388,6 +480,60 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
             </button>
           </div>
         ) : (
+          <>
+          {showShelves && (
+            <div className="lib-shelves">
+              {shelfRows.map((shelf) => (
+                <section key={shelf.id} className="lib-shelf">
+                  <div className="lib-shelf-head">
+                    <h3>{shelf.title}</h3>
+                    <button
+                      className="icon-btn"
+                      onClick={() => saveShelves(shelves.filter((s) => s !== shelf.id))}
+                      title={`Remove the "${shelf.title}" shelf`}
+                      aria-label={`Remove the "${shelf.title}" shelf`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {shelf.items.length === 0 ? (
+                    <p className="lib-shelf-empty">Nothing here yet.</p>
+                  ) : (
+                    <div className="lib-shelf-row">
+                      {shelf.items.map((item) => (
+                        <button
+                          key={item.id}
+                          className="lib-shelf-tile"
+                          onClick={() =>
+                            setSelectedMedia({ media: item.media!, userMedia: item, isOwner: true })
+                          }
+                          title={titleOf(item)}
+                        >
+                          <MediaThumbnail
+                            url={item.media!.file_url}
+                            fileType={item.media!.file_type}
+                            sourceFormat={item.media!.source_format}
+                            showBadge={false}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ))}
+
+              {shelfOptions.length > 0 && (
+                <Select
+                  label="Add a shelf"
+                  value=""
+                  placeholder="+ Add a shelf"
+                  options={shelfOptions}
+                  onChange={(id) => saveShelves([...shelves, id])}
+                />
+              )}
+            </div>
+          )}
+
           <div className={`lib-grid ${viewMode}`}>
             {visibleItems.map((item) => {
               const media = item.media!;
@@ -406,7 +552,12 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
                     if (e.key === 'Enter' && e.target === e.currentTarget) open();
                   }}
                 >
-                  <MediaThumbnail url={media.file_url} fileType={media.file_type} showBadge={false} />
+                  <MediaThumbnail
+                    url={media.file_url}
+                    fileType={media.file_type}
+                    sourceFormat={media.source_format}
+                    showBadge={false}
+                  />
 
                   <div className="lib-tile-flags">
                     {isVideoItem(item) && (
@@ -473,6 +624,7 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
               );
             })}
           </div>
+          </>
         )}
       </section>
 

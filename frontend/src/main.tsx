@@ -6,6 +6,7 @@ import './shell.css';
 import './identity.css';
 import './profile.css';
 import './library.css';
+import './features.css';
 import './themes/volt.css';
 import { applyTheme } from './lib/theme';
 
