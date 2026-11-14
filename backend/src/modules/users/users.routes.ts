@@ -30,9 +30,12 @@ const publicProfileViewSchema = z.object({
     library_count: z.number(),
     total_likes: z.number(),
     total_dislikes: z.number(),
+    followers_count: z.number().default(0),
   }),
   friendship_status: z.enum(['none', 'pending_sent', 'pending_received', 'friends', 'self']),
   is_own_profile: z.boolean(),
+  is_following: z.boolean().default(false),
+  showcase_media_ids: z.array(z.string().uuid()).default([]),
 });
 
 const publicationItemSchema = z.object({
@@ -48,6 +51,8 @@ const publicationItemSchema = z.object({
   likes_count: z.number().default(0),
   dislikes_count: z.number().default(0),
   created_at: z.string(),
+  source_format: z.string().nullable().optional(),
+  in_library: z.boolean().optional(),
 });
 
 const profileCommentItemSchema = z.object({
@@ -145,6 +150,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
             allow_friends_see_private: z.boolean().optional(),
             allow_profile_comments: z.boolean().optional(),
             is_library_public: z.boolean().optional(),
+            showcase_media_ids: z.array(z.string().uuid()).max(6).optional(),
           })
           .refine((data) => Object.keys(data).length > 0, {
             message: 'At least one field must be provided',
@@ -299,7 +305,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // Fetch statistics in parallel
-      const [publishedRes, libraryRes, reactionsRes] = await Promise.all([
+      const [publishedRes, libraryRes, reactionsRes, followersRes, followingRes] = await Promise.all([
         supabaseAdmin
           .from('medias')
           .select('id', { count: 'exact', head: true })
@@ -312,6 +318,17 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
           .from('medias')
           .select('likes_count, dislikes_count')
           .eq('original_uploader_id', userId),
+        supabaseAdmin
+          .from('user_follows')
+          .select('follower_id', { count: 'exact', head: true })
+          .eq('followed_id', userId),
+        callerId && !isOwnProfile
+          ? supabaseAdmin
+              .from('user_follows')
+              .select('follower_id', { count: 'exact', head: true })
+              .eq('follower_id', callerId)
+              .eq('followed_id', userId)
+          : Promise.resolve({ count: 0 }),
       ]);
 
       const publishedCount = publishedRes.count ?? 0;
@@ -361,9 +378,12 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
           library_count: libraryCount,
           total_likes: totalLikes,
           total_dislikes: totalDislikes,
+          followers_count: followersRes.count ?? 0,
         },
         friendship_status: friendshipStatus,
         is_own_profile: isOwnProfile,
+        is_following: (followingRes.count ?? 0) > 0,
+        showcase_media_ids: userRecord.showcase_media_ids ?? [],
       };
     }
   );
@@ -435,6 +455,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
             id,
             file_url,
             file_type,
+            source_format,
             original_title,
             original_uploader_id,
             likes_count,
@@ -459,11 +480,27 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      // Which of these the caller already has in their own library
+      const callerOwned = new Set<string>();
+      if (callerId && !isOwnProfile && (data ?? []).length > 0) {
+        const { data: owned } = await supabaseAdmin
+          .from('user_medias')
+          .select('media_id')
+          .eq('user_id', callerId)
+          .in(
+            'media_id',
+            (data ?? []).map((row: any) => row.media.id)
+          );
+        for (const o of owned ?? []) callerOwned.add(o.media_id);
+      }
+
       const items = (data ?? []).map((row: any) => ({
         id: row.media.id,
         user_media_id: row.id,
         file_url: row.media.file_url,
         file_type: row.media.file_type,
+        source_format: row.media.source_format ?? null,
+        in_library: isOwnProfile || callerOwned.has(row.media.id),
         original_title: row.media.original_title,
         custom_title: row.custom_title,
         tags: row.tags ?? [],
@@ -908,6 +945,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
                   id: z.string().uuid(),
                   file_url: z.string(),
                   file_type: z.string(),
+                  source_format: z.string().nullable().optional(),
                   original_title: z.string().nullable().optional(),
                   tags: z.array(z.string()).default([]),
                   original_uploader_id: z.string().uuid().nullable(),
@@ -964,6 +1002,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
             id,
             file_url,
             file_type,
+            source_format,
             original_title,
             original_uploader_id,
             likes_count,
