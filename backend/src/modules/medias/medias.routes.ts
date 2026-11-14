@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { supabaseAdmin } from '../../lib/supabase.js';
 import { compressVideoOrGif } from '../../lib/video.js';
+import { recordActivity } from '../../lib/activity.js';
 
 const mediaSchema = z.object({
   id: z.string().uuid(),
@@ -17,6 +18,8 @@ const mediaSchema = z.object({
   dislikes_count: z.number().int().default(0),
   user_reaction: z.union([z.literal(1), z.literal(-1)]).nullable().optional(),
   created_at: z.string(),
+  source_format: z.string().nullable().optional(),
+  in_library: z.boolean().optional(),
 });
 
 const userMediaSchema = z.object({
@@ -77,22 +80,26 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         querystring: z.object({
           file_type: z.string().optional(),
           tag: z.string().optional(),
+          sort: z.enum(['new', 'top']).default('new'),
+          q: z.string().max(80).optional(),
           limit: z.coerce.number().int().min(1).max(100).default(30),
           offset: z.coerce.number().int().min(0).default(0),
         }),
         response: {
           200: z.object({
             items: z.array(mediaSchema),
+            has_more: z.boolean(),
           }),
           500: errorSchema,
         },
       },
     },
     async (request, reply) => {
-      const { file_type, tag, limit, offset } = request.query;
+      const { file_type, tag, sort, q, limit, offset } = request.query;
       const currentUserId = request.user?.id;
 
-      // Base query selecting medias that have at least one public user_media
+      // Base query selecting medias that have at least one public user_media.
+      // One extra row is fetched to know whether another page exists.
       let query = supabaseAdmin
         .from('medias')
         .select(
@@ -100,6 +107,7 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
           id,
           file_url,
           file_type,
+          source_format,
           original_title,
           original_uploader_id,
           likes_count,
@@ -108,9 +116,22 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
           user_medias!inner(is_public, tags, is_nsfw)
         `
         )
-        .eq('user_medias.is_public', true)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+        .eq('user_medias.is_public', true);
+
+      if (sort === 'top') {
+        query = query.order('likes_count', { ascending: false });
+      }
+      query = query.order('created_at', { ascending: false }).range(offset, offset + limit);
+
+      // Search title or canonical tags. Only letters, digits, spaces, _ and -
+      // survive, so the term can't break out of the filter expression.
+      const searchTerm = (q ?? '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N} _-]/gu, '')
+        .trim();
+      if (searchTerm) {
+        query = query.or(`original_title.ilike.%${searchTerm}%,tags.cs.{"${searchTerm}"}`);
+      }
 
       if (file_type) {
         query = query.ilike('file_type', `${file_type}%`);
@@ -130,23 +151,38 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // If user is authenticated, query user's existing reactions for these media IDs
-      const mediaIds = (data ?? []).map((row: any) => row.id);
+      const rows = (data ?? []).slice(0, limit);
+      const hasMore = (data ?? []).length > limit;
+
+      // If user is authenticated, look up their reactions and which of these
+      // medias they already have in their library
+      const mediaIds = rows.map((row: any) => row.id);
       const userReactionsMap = new Map<string, 1 | -1>();
+      const inLibrary = new Set<string>();
 
       if (currentUserId && mediaIds.length > 0) {
-        const { data: reactions } = await supabaseAdmin
-          .from('media_reactions')
-          .select('media_id, reaction_type')
-          .eq('user_id', currentUserId)
-          .in('media_id', mediaIds);
+        const [{ data: reactions }, { data: owned }] = await Promise.all([
+          supabaseAdmin
+            .from('media_reactions')
+            .select('media_id, reaction_type')
+            .eq('user_id', currentUserId)
+            .in('media_id', mediaIds),
+          supabaseAdmin
+            .from('user_medias')
+            .select('media_id')
+            .eq('user_id', currentUserId)
+            .in('media_id', mediaIds),
+        ]);
 
         for (const r of reactions ?? []) {
           userReactionsMap.set(r.media_id, r.reaction_type as 1 | -1);
         }
+        for (const o of owned ?? []) {
+          inLibrary.add(o.media_id);
+        }
       }
 
-      const items = (data ?? []).map((row: any) => {
+      const items = rows.map((row: any) => {
         const sourceTags = (
           Array.isArray(row.user_medias)
             ? row.user_medias[0]?.tags
@@ -164,10 +200,12 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
           dislikes_count: row.dislikes_count ?? 0,
           user_reaction: userReactionsMap.get(row.id) ?? null,
           created_at: row.created_at,
+          source_format: row.source_format ?? null,
+          in_library: inLibrary.has(row.id),
         };
       });
 
-      return { items };
+      return { items, has_more: hasMore };
     }
   );
 
@@ -226,6 +264,10 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
       const rawBuffer = await file.toBuffer();
       const processed = await compressVideoOrGif(rawBuffer, file.mimetype, file.filename);
 
+      // A GIF that was transcoded to video is still a GIF to the user
+      const wasGif = file.mimetype === 'image/gif' || file.filename.toLowerCase().endsWith('.gif');
+      const sourceFormat = wasGif && processed.mimeType.startsWith('video/') ? 'gif' : null;
+
       const ext = processed.extension;
       const storagePath = `${userId}/${randomUUID()}.${ext}`;
 
@@ -252,13 +294,14 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         .insert({
           file_url: publicUrlData.publicUrl,
           file_type: processed.mimeType,
+          source_format: sourceFormat,
           original_title: resolvedTitle,
           tags: resolvedTags,
           original_uploader_id: userId,
           likes_count: 0,
           dislikes_count: 0,
         })
-        .select('id, file_url, file_type, original_title, original_uploader_id, likes_count, dislikes_count, created_at')
+        .select('id, file_url, file_type, source_format, original_title, original_uploader_id, likes_count, dislikes_count, created_at')
         .single();
 
       if (mediaResult.error) {
@@ -267,12 +310,13 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
           .insert({
             file_url: publicUrlData.publicUrl,
             file_type: processed.mimeType,
+            source_format: sourceFormat,
             original_title: resolvedTitle,
             original_uploader_id: userId,
             likes_count: 0,
             dislikes_count: 0,
           })
-          .select('id, file_url, file_type, original_title, original_uploader_id, likes_count, dislikes_count, created_at')
+          .select('id, file_url, file_type, source_format, original_title, original_uploader_id, likes_count, dislikes_count, created_at')
           .single();
       }
 
@@ -305,10 +349,15 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      if (is_public) {
+        await recordActivity({ actorId: userId, type: 'upload', mediaId: media.id });
+      }
+
       return reply.status(201).send({
         media: {
           ...media,
           user_reaction: null,
+          in_library: true,
         },
         user_media: userMedia,
       });
@@ -416,6 +465,15 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(500).send({
           error: 'DatabaseError',
           message: forkError.message,
+        });
+      }
+
+      if (isPublic && media.original_uploader_id !== userId) {
+        await recordActivity({
+          actorId: userId,
+          type: 'fork',
+          mediaId,
+          targetUserId: media.original_uploader_id,
         });
       }
 
@@ -598,7 +656,7 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
       // Verify media exists
       const { data: media, error: mediaError } = await supabaseAdmin
         .from('medias')
-        .select('id, likes_count, dislikes_count')
+        .select('id, likes_count, dislikes_count, original_uploader_id')
         .eq('id', mediaId)
         .single();
 
@@ -633,6 +691,29 @@ export async function mediasRoutes(app: FastifyInstance): Promise<void> {
           return reply.status(500).send({
             error: 'DatabaseError',
             message: upsertError.message,
+          });
+        }
+      }
+
+      // Tell the uploader about a new like, once per (liker, media)
+      if (
+        reaction_type === 1 &&
+        media.original_uploader_id &&
+        media.original_uploader_id !== userId
+      ) {
+        const { count } = await supabaseAdmin
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('actor_id', userId)
+          .eq('type', 'like')
+          .eq('media_id', mediaId);
+
+        if (!count) {
+          await recordActivity({
+            actorId: userId,
+            type: 'like',
+            mediaId,
+            targetUserId: media.original_uploader_id,
           });
         }
       }
