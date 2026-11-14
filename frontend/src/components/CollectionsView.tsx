@@ -11,16 +11,40 @@ import {
   Loader2,
   X,
   Layers,
+  Zap,
+  Bell,
+  BellOff,
+  Copy,
 } from 'lucide-react';
 import {
   memedeckApi,
   type CollectionItem,
   type CollectionDetails,
   type CollectionMediaItem,
+  type CollectionRule,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
+import { Select, type SelectOption } from './Select';
+
+type CollectionScope = 'public' | 'mine' | 'subscribed';
+type RuleTypeChoice = 'any' | 'image' | 'video';
+
+const RULE_TYPE_OPTIONS: SelectOption<RuleTypeChoice>[] = [
+  { value: 'any', label: 'Images and videos' },
+  { value: 'image', label: 'Images only' },
+  { value: 'video', label: 'Videos & GIFs only' },
+];
+
+/** Human-readable summary of a dynamic collection's rule. */
+function describeRule(rule: CollectionRule): string {
+  const parts: string[] = [];
+  if (rule.tags?.length) parts.push(rule.tags.map((t) => `#${t}`).join(' or '));
+  if (rule.type) parts.push(rule.type === 'image' ? 'images only' : 'videos & GIFs only');
+  if (rule.min_likes !== undefined) parts.push(`at least ${rule.min_likes} likes`);
+  return parts.join(' · ');
+}
 
 interface CollectionsViewProps {
   onRequireAuth: () => void;
@@ -30,7 +54,8 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const { user } = useAuth();
   const { confirm, notify } = useFeedback();
   const [collections, setCollections] = useState<CollectionItem[]>([]);
-  const [filterMine, setFilterMine] = useState(false);
+  const [scope, setScope] = useState<CollectionScope>('public');
+  const filterMine = scope === 'mine';
   const [loading, setLoading] = useState(true);
 
   // Detail view state
@@ -43,6 +68,12 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const [newTitle, setNewTitle] = useState('');
   const [newIsPublic, setNewIsPublic] = useState(true);
   const [creating, setCreating] = useState(false);
+  // Dynamic rule fields of the create form
+  const [newDynamic, setNewDynamic] = useState(false);
+  const [ruleTags, setRuleTags] = useState('');
+  const [ruleType, setRuleType] = useState<RuleTypeChoice>('any');
+  const [ruleMinLikes, setRuleMinLikes] = useState('');
+  const [socialBusy, setSocialBusy] = useState(false);
 
   // Random draw test state
   const [randomDrawResults, setRandomDrawResults] = useState<CollectionMediaItem[] | null>(null);
@@ -51,7 +82,10 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const fetchCollections = async () => {
     setLoading(true);
     try {
-      const res = await memedeckApi.getCollections(filterMine);
+      const res =
+        scope === 'subscribed'
+          ? await memedeckApi.getSubscribedCollections()
+          : await memedeckApi.getCollections(filterMine);
       setCollections(res.items);
     } catch {
       setCollections([]);
@@ -62,7 +96,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
 
   useEffect(() => {
     fetchCollections();
-  }, [filterMine]);
+  }, [scope]);
 
   const handleOpenCollection = async (col: CollectionItem) => {
     setSelectedColId(col.id);
@@ -74,6 +108,64 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
       notify(err.message ?? 'Failed to load collection details', 'error');
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  const buildRule = (): CollectionRule | undefined => {
+    const tags = ruleTags
+      .split(',')
+      .map((t) => t.trim().toLowerCase().replace(/^#/, ''))
+      .filter(Boolean);
+    const minLikes = ruleMinLikes.trim() === '' ? undefined : Math.max(0, Number(ruleMinLikes));
+    const rule: CollectionRule = {
+      ...(tags.length > 0 && { tags }),
+      ...(ruleType !== 'any' && { type: ruleType }),
+      ...(minLikes !== undefined && Number.isFinite(minLikes) && { min_likes: Math.floor(minLikes) }),
+    };
+    return Object.keys(rule).length > 0 ? rule : undefined;
+  };
+
+  const dynamicRuleMissing = newDynamic && !buildRule();
+
+  const handleToggleSubscription = async () => {
+    if (!details) return;
+    if (!user) {
+      onRequireAuth();
+      return;
+    }
+    setSocialBusy(true);
+    try {
+      const res = details.is_subscribed
+        ? await memedeckApi.unsubscribeFromCollection(details.collection.id)
+        : await memedeckApi.subscribeToCollection(details.collection.id);
+      setDetails((prev) => (prev ? { ...prev, is_subscribed: res.subscribed } : null));
+      notify(res.subscribed ? 'Subscribed to this deck' : 'Unsubscribed', 'success');
+    } catch (err: any) {
+      notify(err.message ?? 'Failed to update subscription', 'error');
+    } finally {
+      setSocialBusy(false);
+    }
+  };
+
+  const handleCopyCollection = async () => {
+    if (!details) return;
+    if (!user) {
+      onRequireAuth();
+      return;
+    }
+    setSocialBusy(true);
+    try {
+      const res = await memedeckApi.forkCollection(details.collection.id);
+      notify(
+        `Copied "${res.collection.title}" to your decks with ${res.copied_count} meme${
+          res.copied_count === 1 ? '' : 's'
+        }`,
+        'success'
+      );
+    } catch (err: any) {
+      notify(err.message ?? 'Failed to copy this deck', 'error');
+    } finally {
+      setSocialBusy(false);
     }
   };
 
@@ -90,7 +182,11 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
 
     setCreating(true);
     try {
-      await memedeckApi.createCollection(title, newIsPublic);
+      await memedeckApi.createCollection(title, newIsPublic, newDynamic ? buildRule() : undefined);
+      setNewDynamic(false);
+      setRuleTags('');
+      setRuleType('any');
+      setRuleMinLikes('');
       setNewTitle('');
       setIsCreateOpen(false);
       fetchCollections();
@@ -181,6 +277,14 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
                   <span>{details.collection.is_public ? 'Public Deck' : 'Private Deck'}</span>
                 </span>
                 <span className="count-pill">{details.items.length} items</span>
+                {details.collection.rule && (
+                  <span className="count-pill dynamic" title="Content is computed from this rule">
+                    <Zap size={12} /> {describeRule(details.collection.rule)}
+                  </span>
+                )}
+                {!isOwner && details.owner_username && (
+                  <span className="count-pill">by {details.owner_username}</span>
+                )}
               </div>
             </div>
           </div>
@@ -194,6 +298,29 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
               <Dice5 size={16} />
               <span>{drawingRandom ? 'Drawing...' : 'Draw Random Memes'}</span>
             </button>
+
+            {!isOwner && (
+              <>
+                <button
+                  className="small-action-btn"
+                  onClick={handleToggleSubscription}
+                  disabled={socialBusy}
+                  aria-pressed={details.is_subscribed}
+                >
+                  {details.is_subscribed ? <BellOff size={15} /> : <Bell size={15} />}
+                  <span>{details.is_subscribed ? 'Unsubscribe' : 'Subscribe'}</span>
+                </button>
+                <button
+                  className="small-action-btn"
+                  onClick={handleCopyCollection}
+                  disabled={socialBusy || details.items.length === 0}
+                  title="Copy this deck and its memes into your own library"
+                >
+                  <Copy size={15} />
+                  <span>Copy to my decks</span>
+                </button>
+              </>
+            )}
 
             {isOwner && (
               <button
@@ -224,7 +351,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
             <div className="random-draw-grid">
               {randomDrawResults.map((item, idx) => (
                 <div key={idx} className="draw-preview-thumb">
-                  <MediaThumbnail url={item.file_url} fileType={item.file_type} showBadge={false} />
+                  <MediaThumbnail url={item.file_url} fileType={item.file_type} sourceFormat={item.source_format} showBadge={false} />
                 </div>
               ))}
             </div>
@@ -246,8 +373,8 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
           <div className="lib-grid tiles">
             {details.items.map((item) => (
               <div key={item.user_media_id} className="lib-tile static">
-                <MediaThumbnail url={item.file_url} fileType={item.file_type} />
-                {isOwner && (
+                <MediaThumbnail url={item.file_url} fileType={item.file_type} sourceFormat={item.source_format} />
+                {isOwner && !details.collection.rule && (
                   <div className="lib-tile-quick">
                     <button
                       className="danger"
@@ -281,16 +408,22 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
           {user && (
             <div className="filter-pill-group">
               <button
-                className={`filter-pill ${!filterMine ? 'active' : ''}`}
-                onClick={() => setFilterMine(false)}
+                className={`filter-pill ${scope === 'public' ? 'active' : ''}`}
+                onClick={() => setScope('public')}
               >
                 Public Decks
               </button>
               <button
-                className={`filter-pill ${filterMine ? 'active' : ''}`}
-                onClick={() => setFilterMine(true)}
+                className={`filter-pill ${scope === 'mine' ? 'active' : ''}`}
+                onClick={() => setScope('mine')}
               >
                 My Decks
+              </button>
+              <button
+                className={`filter-pill ${scope === 'subscribed' ? 'active' : ''}`}
+                onClick={() => setScope('subscribed')}
+              >
+                Subscribed
               </button>
             </div>
           )}
@@ -355,9 +488,17 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
                   <span className="deck-privacy" title={col.is_public ? 'Public deck' : 'Private deck'}>
                     {col.is_public ? <Globe size={13} /> : <Lock size={13} />}
                   </span>
+                  {col.rule && (
+                    <span className="deck-dynamic" title={`Dynamic: ${describeRule(col.rule)}`}>
+                      <Zap size={13} />
+                    </span>
+                  )}
                   <div className="deck-label">
                     <h3>{col.title}</h3>
                     <span>( {col.item_count ?? 0} )</span>
+                    {col.user_id !== user?.id && col.owner_username && (
+                      <small>by {col.owner_username}</small>
+                    )}
                   </div>
                 </button>
               );
@@ -367,8 +508,10 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
           {collections.length === 0 && (
             <p className="deck-empty-hint">
               <FolderHeart size={16} />
-              {filterMine
+              {scope === 'mine'
                 ? 'You have not created any collections yet.'
+                : scope === 'subscribed'
+                ? 'You have not subscribed to any deck yet. Open a public deck and hit Subscribe.'
                 : 'No public collections have been shared yet.'}
             </p>
           )}
@@ -414,7 +557,65 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
                 </span>
               </label>
 
-              <button type="submit" className="submit-btn" disabled={creating || !newTitle.trim()}>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={newDynamic}
+                  onChange={(e) => setNewDynamic(e.target.checked)}
+                />
+                <span>
+                  <strong>
+                    <Zap size={13} /> Dynamic collection
+                  </strong>
+                  <small>Fills itself from your library using a rule, instead of by hand.</small>
+                </span>
+              </label>
+
+              {newDynamic && (
+                <div className="rule-box">
+                  <label className="form-group">
+                    <span>Has any of these tags (comma separated)</span>
+                    <input
+                      type="text"
+                      placeholder="reaction, cat"
+                      value={ruleTags}
+                      onChange={(e) => setRuleTags(e.target.value)}
+                    />
+                  </label>
+
+                  <div className="rule-row">
+                    <div className="form-group">
+                      <span>Type</span>
+                      <Select
+                        label="Media type"
+                        value={ruleType}
+                        options={RULE_TYPE_OPTIONS}
+                        onChange={setRuleType}
+                      />
+                    </div>
+                    <label className="form-group">
+                      <span>Minimum likes</span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        value={ruleMinLikes}
+                        onChange={(e) => setRuleMinLikes(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  {dynamicRuleMissing && (
+                    <small className="rule-hint">Set at least one condition.</small>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="submit-btn"
+                disabled={creating || !newTitle.trim() || dynamicRuleMissing}
+              >
                 {creating ? 'Creating...' : 'Create Collection'}
               </button>
             </form>
