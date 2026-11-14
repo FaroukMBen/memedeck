@@ -1,5 +1,10 @@
 {
   "name": "memedeck-root",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
 }
+
