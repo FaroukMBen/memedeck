@@ -5,11 +5,11 @@ import {
   Library,
   LogOut,
   Plus,
-  Sparkles,
   User as UserIcon,
 } from 'lucide-react';
 import { memedeckApi } from './lib/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { FeedbackProvider } from './context/FeedbackContext';
 import { AuthModal } from './components/AuthModal';
 import { UploadModal } from './components/UploadModal';
 import { DiscoverView } from './components/DiscoverView';
@@ -43,10 +43,19 @@ function AppContent() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-badge">
-            <Sparkles size={18} />
+          <svg className="brand-mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+            <path d="M10 9V4h15l4 4v15h-6" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path
+              d="M3 9h16l4 4v16H3z"
+              fill="var(--accent)"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            <path d="M8.5 25l9-12" fill="none" stroke="var(--on-accent)" strokeWidth="3" />
+          </svg>
+          <span className="brand-word" aria-label="MemeDeck">
+            MEME<i aria-hidden="true">/</i>DECK
           </span>
-          <span>MemeDeck</span>
         </div>
 
         <nav className="nav-tabs" aria-label="Main navigation">
@@ -209,7 +218,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <FeedbackProvider>
+        <AppContent />
+      </FeedbackProvider>
     </AuthProvider>
   );
 }
