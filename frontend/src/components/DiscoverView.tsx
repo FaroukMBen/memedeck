@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { memedeckApi, type MediaItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { hueFromString } from '../lib/hue';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
 import { AddToLibraryModal } from './AddToLibraryModal';
@@ -42,6 +43,7 @@ function titleOf(item: MediaItem): string {
 
 export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: DiscoverViewProps) {
   const { user } = useAuth();
+  const { notify } = useFeedback();
   const [medias, setMedias] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
@@ -170,7 +172,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
         )
       );
     } catch (err: any) {
-      alert(err.message ?? 'Failed to vote');
+      notify(err.message ?? 'Failed to vote', 'error');
     }
   };
 

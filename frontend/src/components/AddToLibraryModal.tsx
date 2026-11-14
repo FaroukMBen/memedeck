@@ -2,6 +2,7 @@ import { useState, useEffect, type KeyboardEvent } from 'react';
 import { BookmarkPlus, X, Tag, Check, Loader2, Globe, ShieldAlert } from 'lucide-react';
 import { memedeckApi, type MediaItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
 
 interface AddToLibraryModalProps {
@@ -20,6 +21,7 @@ export function AddToLibraryModal({
   onRequireAuth,
 }: AddToLibraryModalProps) {
   const { user } = useAuth();
+  const { notify } = useFeedback();
 
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -83,7 +85,7 @@ export function AddToLibraryModal({
         onClose();
       }, 700);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to add meme to your library');
+      notify(err.message ?? 'Failed to add meme to your library', 'error');
     } finally {
       setSubmitting(false);
     }

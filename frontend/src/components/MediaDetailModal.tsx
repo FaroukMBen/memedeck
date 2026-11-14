@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { memedeckApi, type MediaItem, type UserMediaItem, type CollectionItem } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
 import { AddToLibraryModal } from './AddToLibraryModal';
 
@@ -59,6 +60,7 @@ export function MediaDetailModal({
   onNavigateToUser,
 }: MediaDetailModalProps) {
   const { user } = useAuth();
+  const { confirm, notify } = useFeedback();
   const [copied, setCopied] = useState(false);
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [colAddedMsg, setColAddedMsg] = useState(false);
@@ -122,7 +124,7 @@ export function MediaDetailModal({
       setUserReaction(res.user_reaction);
       onReactionUpdated?.(media.id, res.likes_count, res.dislikes_count, res.user_reaction);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to update reaction');
+      notify(err.message ?? 'Failed to update reaction', 'error');
     } finally {
       setReacting(false);
     }
@@ -138,26 +140,27 @@ export function MediaDetailModal({
       );
       onPrivacyChanged?.(userMedia.id, updated.is_public);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to update privacy');
+      notify(err.message ?? 'Failed to update privacy', 'error');
     }
   };
 
   const handleDelete = async () => {
     if (!userMedia) return;
-    if (
-      !confirm(
-        'Remove this media from your library? If no other user possesses it, it will be automatically cleaned up from storage.'
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: 'Remove from your library?',
+      message:
+        'If no other user has this media in their library, the file is also deleted from storage.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       await memedeckApi.deleteUserMedia(userMedia.id);
       onDeleted?.(userMedia.id);
       onClose();
     } catch (err: any) {
-      alert(err.message ?? 'Failed to remove media');
+      notify(err.message ?? 'Failed to remove media', 'error');
     }
   };
 
@@ -169,7 +172,7 @@ export function MediaDetailModal({
       setColMenuOpen(false);
       setTimeout(() => setColAddedMsg(false), 2000);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to add to collection');
+      notify(err.message ?? 'Failed to add to collection', 'error');
     }
   };
 
@@ -214,7 +217,7 @@ export function MediaDetailModal({
       onUserMediaUpdated?.(updated);
       setIsEditing(false);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to update media');
+      notify(err.message ?? 'Failed to update media', 'error');
     } finally {
       setSavingEdit(false);
     }

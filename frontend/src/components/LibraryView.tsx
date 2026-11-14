@@ -22,8 +22,10 @@ import {
   type CollectionItem,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
 import { MediaThumbnail } from './MediaThumbnail';
+import { Select, type SelectOption } from './Select';
 
 interface LibraryViewProps {
   onRequireAuth: () => void;
@@ -35,6 +37,12 @@ type ViewMode = 'tiles' | 'mosaic';
 
 const VIEW_MODE_KEY = 'memedeck.library.viewMode';
 const MAX_SIDEBAR_TAGS = 12;
+
+const SORT_OPTIONS: SelectOption<SortKey>[] = [
+  { value: 'added', label: 'Date added' },
+  { value: 'title', label: 'Title' },
+  { value: 'likes', label: 'Most liked' },
+];
 
 function readViewMode(): ViewMode {
   try {
@@ -54,6 +62,7 @@ function isVideoItem(item: UserMediaItem): boolean {
 
 export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
   const { user } = useAuth();
+  const { confirm, notify } = useFeedback();
   const [items, setItems] = useState<UserMediaItem[]>([]);
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,24 +150,25 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
         prev.map((i) => (i.id === item.id ? { ...i, is_public: updated.is_public } : i))
       );
     } catch (err: any) {
-      alert(err.message ?? 'Failed to update privacy');
+      notify(err.message ?? 'Failed to update privacy', 'error');
     }
   };
 
   const handleDelete = async (userMediaId: string) => {
-    if (
-      !confirm(
-        'Remove this media from your library? If no other user possesses it, it will be automatically cleaned up from storage.'
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: 'Remove from your library?',
+      message:
+        'If no other user has this media in their library, the file is also deleted from storage.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       await memedeckApi.deleteUserMedia(userMediaId);
       setItems((prev) => prev.filter((i) => i.id !== userMediaId));
     } catch (err: any) {
-      alert(err.message ?? 'Failed to remove item');
+      notify(err.message ?? 'Failed to remove item', 'error');
     }
   };
 
@@ -314,14 +324,10 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
           </h2>
 
           <div className="lib-toolbar-actions">
-            <label className="lib-sort">
-              <span>Sort by</span>
-              <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
-                <option value="added">Date added</option>
-                <option value="title">Title</option>
-                <option value="likes">Most liked</option>
-              </select>
-            </label>
+            <div className="lib-sort">
+              <span aria-hidden="true">Sort by</span>
+              <Select label="Sort by" value={sortKey} options={SORT_OPTIONS} onChange={setSortKey} />
+            </div>
 
             <div className="filter-pill-group" role="group" aria-label="Layout">
               <button

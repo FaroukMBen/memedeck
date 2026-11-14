@@ -19,6 +19,7 @@ import {
   type CollectionMediaItem,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
 
 interface CollectionsViewProps {
@@ -27,6 +28,7 @@ interface CollectionsViewProps {
 
 export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const { user } = useAuth();
+  const { confirm, notify } = useFeedback();
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [filterMine, setFilterMine] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -69,7 +71,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
       const res = await memedeckApi.getCollectionDetails(col.id);
       setDetails(res);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to load collection details');
+      notify(err.message ?? 'Failed to load collection details', 'error');
     } finally {
       setLoadingDetails(false);
     }
@@ -93,14 +95,20 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
       setIsCreateOpen(false);
       fetchCollections();
     } catch (err: any) {
-      alert(err.message ?? 'Failed to create collection');
+      notify(err.message ?? 'Failed to create collection', 'error');
     } finally {
       setCreating(false);
     }
   };
 
   const handleDeleteCollection = async (colId: string) => {
-    if (!confirm('Are you sure you want to delete this collection?')) return;
+    const confirmed = await confirm({
+      title: 'Delete this collection?',
+      message: 'The deck is deleted. The memes inside stay in your library.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       await memedeckApi.deleteCollection(colId);
@@ -108,7 +116,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
       setDetails(null);
       fetchCollections();
     } catch (err: any) {
-      alert(err.message ?? 'Failed to delete collection');
+      notify(err.message ?? 'Failed to delete collection', 'error');
     }
   };
 
@@ -120,7 +128,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
       const res = await memedeckApi.getRandomFromCollection(selectedColId, 5);
       setRandomDrawResults(res.items);
     } catch (err: any) {
-      alert(err.message ?? 'Failed to draw random items');
+      notify(err.message ?? 'Failed to draw random items', 'error');
     } finally {
       setDrawingRandom(false);
     }
@@ -140,7 +148,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
           : null
       );
     } catch (err: any) {
-      alert(err.message ?? 'Failed to remove item from collection');
+      notify(err.message ?? 'Failed to remove item from collection', 'error');
     }
   };
 
