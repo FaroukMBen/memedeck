@@ -73,9 +73,12 @@ export interface UserProfile {
     library_count: number;
     total_likes: number;
     total_dislikes: number;
+    followers_count: number;
   };
   friendship_status: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'self';
   is_own_profile: boolean;
+  is_following: boolean;
+  showcase_media_ids: string[];
 }
 
 export interface PublicationItem {
@@ -91,6 +94,8 @@ export interface PublicationItem {
   likes_count: number;
   dislikes_count: number;
   created_at: string;
+  source_format?: string | null;
+  in_library?: boolean;
 }
 
 export interface ProfileComment {
@@ -122,6 +127,10 @@ export interface MediaItem {
   dislikes_count: number;
   user_reaction: 1 | -1 | null;
   created_at: string;
+  /** Original format when the stored file was converted, e.g. 'gif' for a GIF transcoded to MP4 */
+  source_format?: string | null;
+  /** True when the signed-in user already has this media in their library */
+  in_library?: boolean;
 }
 
 export interface UserMediaItem {
@@ -143,11 +152,35 @@ export interface ReactionResponse {
   user_reaction: 1 | -1 | null;
 }
 
+export interface CollectionRule {
+  tags?: string[];
+  type?: 'image' | 'video';
+  min_likes?: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: 'upload' | 'fork' | 'collection' | 'like';
+  created_at: string;
+  actor: { id: string; username: string | null; avatar_url: string | null };
+  media: {
+    id: string;
+    file_url: string;
+    file_type: string;
+    source_format: string | null;
+    title: string | null;
+  } | null;
+  collection: { id: string; title: string } | null;
+}
+
 export interface CollectionItem {
   id: string;
   user_id: string;
   title: string;
   is_public: boolean;
+  /** Set on dynamic collections: content is computed from this rule */
+  rule?: CollectionRule | null;
+  owner_username?: string | null;
   item_count?: number;
   previews?: { file_url: string; file_type: string }[];
 }
@@ -157,23 +190,39 @@ export interface CollectionMediaItem {
   media_id: string;
   file_url: string;
   file_type: string;
+  source_format?: string | null;
   added_at: string;
 }
 
 export interface CollectionDetails {
   collection: CollectionItem;
   items: CollectionMediaItem[];
+  owner_username: string | null;
+  is_subscribed: boolean;
 }
 
 export const memedeckApi = {
   health: () => apiFetch<HealthResponse>('/health'),
   getMe: () => apiFetch<UserProfile>('/api/v1/users/me'),
-  getPublicMedias: (fileType?: string, tag?: string) => {
+  getPublicMedias: (
+    options: {
+      fileType?: string;
+      tag?: string;
+      sort?: 'new' | 'top';
+      q?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ) => {
     const params = new URLSearchParams();
-    if (fileType) params.set('file_type', fileType);
-    if (tag) params.set('tag', tag);
+    if (options.fileType) params.set('file_type', options.fileType);
+    if (options.tag) params.set('tag', options.tag);
+    if (options.sort) params.set('sort', options.sort);
+    if (options.q?.trim()) params.set('q', options.q.trim());
+    if (options.limit) params.set('limit', String(options.limit));
+    if (options.offset) params.set('offset', String(options.offset));
     const qs = params.toString() ? `?${params.toString()}` : '';
-    return apiFetch<{ items: MediaItem[] }>(`/api/v1/medias${qs}`);
+    return apiFetch<{ items: MediaItem[]; has_more: boolean }>(`/api/v1/medias${qs}`);
   },
   reactToMedia: (mediaId: string, reactionType: 1 | -1 | 0) =>
     apiFetch<ReactionResponse>(`/api/v1/medias/${mediaId}/reactions`, {
@@ -245,12 +294,36 @@ export const memedeckApi = {
     apiFetch<{ collection_id: string; items: CollectionMediaItem[] }>(
       `/api/v1/collections/${collectionId}/random?count=${count}`
     ),
-  createCollection: (title: string, isPublic = false) =>
+  createCollection: (title: string, isPublic = false, rule?: CollectionRule) =>
     apiFetch<CollectionItem>('/api/v1/collections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, is_public: isPublic }),
+      body: JSON.stringify({ title, is_public: isPublic, rule }),
     }),
+  getSubscribedCollections: () =>
+    apiFetch<{ items: CollectionItem[] }>('/api/v1/collections?subscribed=true'),
+  subscribeToCollection: (collectionId: string) =>
+    apiFetch<{ subscribed: boolean }>(`/api/v1/collections/${collectionId}/subscribe`, {
+      method: 'POST',
+    }),
+  unsubscribeFromCollection: (collectionId: string) =>
+    apiFetch<{ subscribed: boolean }>(`/api/v1/collections/${collectionId}/subscribe`, {
+      method: 'DELETE',
+    }),
+  forkCollection: (collectionId: string) =>
+    apiFetch<{ collection: CollectionItem; copied_count: number }>(
+      `/api/v1/collections/${collectionId}/fork`,
+      { method: 'POST' }
+    ),
+
+  // Follows and activity
+  followUser: (userId: string) =>
+    apiFetch<{ following: boolean }>(`/api/v1/users/${userId}/follow`, { method: 'POST' }),
+  unfollowUser: (userId: string) =>
+    apiFetch<{ following: boolean }>(`/api/v1/users/${userId}/follow`, { method: 'DELETE' }),
+  getUserActivity: (userId: string, limit = 20) =>
+    apiFetch<{ items: ActivityItem[] }>(`/api/v1/users/${userId}/activity?limit=${limit}`),
+  getFeed: (limit = 12) => apiFetch<{ items: ActivityItem[] }>(`/api/v1/feed?limit=${limit}`),
   deleteCollection: (collectionId: string) =>
     apiFetch<null>(`/api/v1/collections/${collectionId}`, {
       method: 'DELETE',
@@ -315,6 +388,7 @@ export const memedeckApi = {
     allow_friends_see_private?: boolean;
     allow_profile_comments?: boolean;
     is_library_public?: boolean;
+    showcase_media_ids?: string[];
   }) =>
     apiFetch<CurrentUserProfile>('/api/v1/users/me', {
       method: 'PATCH',

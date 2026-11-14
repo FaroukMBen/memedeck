@@ -66,7 +66,7 @@ export function MediaDetailModal({
   const [colAddedMsg, setColAddedMsg] = useState(false);
 
   // Add to Library state
-  const [addedToLib, setAddedToLib] = useState(false);
+  const [addedToLib, setAddedToLib] = useState(selected?.media.in_library ?? false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Edit Mode state
@@ -92,7 +92,7 @@ export function MediaDetailModal({
       setLikesCount(selected.media.likes_count ?? 0);
       setDislikesCount(selected.media.dislikes_count ?? 0);
       setUserReaction(selected.media.user_reaction ?? null);
-      setAddedToLib(false);
+      setAddedToLib(selected.media.in_library ?? false);
       setIsAddModalOpen(false);
       setIsEditing(selected.initialEditMode ?? false);
       setEditTitle(selected.userMedia?.custom_title || selected.media.original_title || '');
@@ -105,7 +105,8 @@ export function MediaDetailModal({
   if (!selected) return null;
 
   const { media, userMedia, isOwner } = selected;
-  const isVideo = media.file_type.startsWith('video/');
+  const isGif = media.source_format === 'gif';
+  const isVideo = media.file_type.startsWith('video/') && !isGif;
   const displayTitle = userMedia?.custom_title || media.original_title || 'Untitled Meme';
 
   const handleReaction = async (targetType: 1 | -1) => {
@@ -241,8 +242,9 @@ export function MediaDetailModal({
           <MediaThumbnail
             url={media.file_url}
             fileType={media.file_type}
+            sourceFormat={media.source_format}
             isDetailView={true}
-            controls={true}
+            controls={!isGif}
             autoPlay={true}
             loop={true}
             showBadge={false}
@@ -376,7 +378,7 @@ export function MediaDetailModal({
                 <div className="detail-pill-row">
                   <span className="file-type-badge large">
                     {isVideo ? <Film size={14} /> : <ImageIcon size={14} />}
-                    {media.file_type.split('/')[1]?.toUpperCase() || 'MEDIA'}
+                    {isGif ? 'GIF' : media.file_type.split('/')[1]?.toUpperCase() || 'MEDIA'}
                   </span>
 
                   {userMedia?.is_nsfw && (
@@ -504,7 +506,7 @@ export function MediaDetailModal({
                     {addedToLib ? (
                       <>
                         <Check size={16} />
-                        <span>In Your Library</span>
+                        <span>Already in your library</span>
                       </>
                     ) : (
                       <>
