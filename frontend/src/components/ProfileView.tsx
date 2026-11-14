@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import {
   UserPlus,
   UserCheck,
-  UserX,
+  Clock,
   MessageSquare,
   ThumbsUp,
   ThumbsDown,
@@ -14,11 +14,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Library,
-  UploadCloud,
   Send,
   AlertCircle,
   Camera,
+  CalendarDays,
+  Film,
+  Images,
+  Trophy,
+  Hash,
+  Users,
 } from 'lucide-react';
 import {
   memedeckApi,
@@ -28,8 +32,11 @@ import {
   type CollectionItem,
 } from '../lib/api';
 import { compressImageClientSide } from '../lib/compression';
+import { hueFromString } from '../lib/hue';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
+import { Select, type SelectOption } from './Select';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
 
 interface ProfileViewProps {
@@ -38,8 +45,63 @@ interface ProfileViewProps {
   onNavigateToUser?: (userId: string) => void;
 }
 
+type ProfileTab = 'publications' | 'comments';
+type PubSort = 'recent' | 'likes';
+type PubFilter = 'all' | 'image' | 'video';
+
+const PUB_SORT_OPTIONS: SelectOption<PubSort>[] = [
+  { value: 'recent', label: 'Most recent' },
+  { value: 'likes', label: 'Most liked' },
+];
+
+const BEST_OF_COUNT = 3;
+const MAX_TOP_TAGS = 10;
+
+function pubTitle(pub: PublicationItem): string {
+  return pub.custom_title || pub.original_title || 'Untitled Meme';
+}
+
+function isVideoPub(pub: PublicationItem): boolean {
+  return pub.file_type.startsWith('video/');
+}
+
+/** Round avatar that falls back to the user's initial when there is no usable image. */
+function Avatar({
+  url,
+  name,
+  className = '',
+}: {
+  url?: string | null;
+  name?: string | null;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={name ? `${name}'s avatar` : 'User avatar'}
+        className={`pf-avatar ${className}`}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <span className={`pf-avatar pf-avatar-fallback ${className}`} aria-hidden="true">
+      {(name || '?').charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
 export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: ProfileViewProps) {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, username: currentUsername } = useAuth();
+  const { confirm, notify } = useFeedback();
 
   // Profile data state
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -53,8 +115,10 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
   const [loadingComments, setLoadingComments] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  // Active section tab
-  const [activeTab, setActiveTab] = useState<'publications' | 'comments'>('publications');
+  // Section tab and publication browsing
+  const [activeTab, setActiveTab] = useState<ProfileTab>('publications');
+  const [pubSort, setPubSort] = useState<PubSort>('recent');
+  const [pubFilter, setPubFilter] = useState<PubFilter>('all');
 
   // Selected media modal state
   const [selectedMedia, setSelectedMedia] = useState<SelectedMediaContext | null>(null);
@@ -79,6 +143,15 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
   const [newCommentText, setNewCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
 
+  const resetEditForm = (data: UserProfile) => {
+    setEditUsername(data.username || '');
+    setAvatarPreview(data.avatar_url || null);
+    setSelectedAvatarFile(null);
+    setEditBio(data.bio || '');
+    setEditAllowFriendsPrivate(data.allow_friends_see_private);
+    setEditAllowComments(data.allow_profile_comments);
+  };
+
   // 1. Fetch Profile Info
   const fetchProfile = async () => {
     setLoadingProfile(true);
@@ -86,12 +159,7 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
     try {
       const data = await memedeckApi.getUserProfile(userId);
       setProfile(data);
-      setEditUsername(data.username || '');
-      setAvatarPreview(data.avatar_url || null);
-      setSelectedAvatarFile(null);
-      setEditBio(data.bio || '');
-      setEditAllowFriendsPrivate(data.allow_friends_see_private);
-      setEditAllowComments(data.allow_profile_comments);
+      resetEditForm(data);
     } catch (err: any) {
       setProfileError(err.message ?? 'Failed to load profile');
     } finally {
@@ -150,6 +218,8 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
   }, [currentUser]);
 
   useEffect(() => {
+    setActiveTab('publications');
+    setPubFilter('all');
     fetchProfile();
     fetchPublications();
     fetchComments(1);
@@ -193,13 +263,19 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
       );
       setSelectedAvatarFile(null);
       setIsEditingProfile(false);
+      notify('Profile updated', 'success');
       // Re-fetch publications in case privacy toggle affected what's visible
       fetchPublications();
     } catch (err: any) {
-      alert(err.message ?? 'Failed to update profile');
+      notify(err.message ?? 'Failed to update profile', 'error');
     } finally {
       setSavingProfile(false);
     }
+  };
+
+  const closeEditModal = () => {
+    setIsEditingProfile(false);
+    if (profile) resetEditForm(profile);
   };
 
   // Handle Friendship Actions
@@ -220,18 +296,24 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
         setProfile((prev) => (prev ? { ...prev, friendship_status: 'friends' } : null));
         fetchPublications();
       } else if (profile.friendship_status === 'friends' || profile.friendship_status === 'pending_sent') {
-        const confirmMsg =
-          profile.friendship_status === 'friends'
-            ? 'Remove this user from your friends?'
-            : 'Cancel this friend request?';
-        if (confirm(confirmMsg)) {
+        const isFriend = profile.friendship_status === 'friends';
+        const confirmed = await confirm({
+          title: isFriend ? 'Remove this friend?' : 'Cancel this friend request?',
+          message: isFriend
+            ? 'You will no longer see each other’s friends-only content.'
+            : undefined,
+          confirmLabel: isFriend ? 'Remove friend' : 'Cancel request',
+          cancelLabel: 'Keep',
+          tone: 'danger',
+        });
+        if (confirmed) {
           await memedeckApi.removeFriendship(userId);
           setProfile((prev) => (prev ? { ...prev, friendship_status: 'none' } : null));
           fetchPublications();
         }
       }
     } catch (err: any) {
-      alert(err.message ?? 'Friendship action failed');
+      notify(err.message ?? 'Friendship action failed', 'error');
     } finally {
       setFriendActionLoading(false);
     }
@@ -253,7 +335,7 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
       setTotalComments((prev) => prev + 1);
       setNewCommentText('');
     } catch (err: any) {
-      alert(err.message ?? 'Failed to post comment');
+      notify(err.message ?? 'Failed to post comment', 'error');
     } finally {
       setSubmittingComment(false);
     }
@@ -261,22 +343,60 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
 
   // Delete a comment
   const handleDeleteComment = async (commentId: string) => {
-    if (!confirm('Delete this comment?')) return;
+    const confirmed = await confirm({
+      title: 'Delete this comment?',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await memedeckApi.deleteProfileComment(userId, commentId);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       setTotalComments((prev) => Math.max(0, prev - 1));
     } catch (err: any) {
-      alert(err.message ?? 'Failed to delete comment');
+      notify(err.message ?? 'Failed to delete comment', 'error');
     }
   };
+
+  // The most liked publications, shown as a podium above the grid
+  const bestOf = useMemo(() => {
+    if (publications.length <= BEST_OF_COUNT) return [];
+    return [...publications]
+      .filter((p) => p.likes_count > 0)
+      .sort((a, b) => b.likes_count - a.likes_count)
+      .slice(0, BEST_OF_COUNT);
+  }, [publications]);
+
+  const topTags = useMemo(() => {
+    const tagCounts = new Map<string, number>();
+    for (const pub of publications) {
+      for (const tag of pub.tags ?? []) {
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+      }
+    }
+    return [...tagCounts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, MAX_TOP_TAGS);
+  }, [publications]);
+
+  const visiblePubs = useMemo(() => {
+    const list = publications.filter((p) => {
+      if (pubFilter === 'image') return !isVideoPub(p);
+      if (pubFilter === 'video') return isVideoPub(p);
+      return true;
+    });
+    if (pubSort === 'likes') {
+      list.sort((a, b) => b.likes_count - a.likes_count);
+    }
+    return list;
+  }, [publications, pubFilter, pubSort]);
 
   if (loadingProfile) {
     return (
       <div className="view-container">
         <div className="loading-state">
           <Loader2 size={36} className="spin" />
-          <p>Loading creator profile...</p>
+          <p>Loading profile...</p>
         </div>
       </div>
     );
@@ -295,453 +415,494 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
   }
 
   const isOwnProfile = profile.is_own_profile;
-  const initial = profile.username ? profile.username.charAt(0).toUpperCase() : '?';
+  const displayName = profile.username || 'Anonymous';
+  const { published_count, library_count, total_likes, total_dislikes } = profile.stats;
+  const totalVotes = total_likes + total_dislikes;
+  const approval = totalVotes > 0 ? Math.round((total_likes / totalVotes) * 100) : null;
+  const memberSince = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    : null;
+
+  const openPublication = (pub: PublicationItem) =>
+    setSelectedMedia({
+      media: {
+        id: pub.id,
+        file_url: pub.file_url,
+        file_type: pub.file_type,
+        original_title: pub.original_title || null,
+        original_uploader_id: userId,
+        likes_count: pub.likes_count,
+        dislikes_count: pub.dislikes_count,
+        user_reaction: null,
+        created_at: pub.created_at,
+      },
+      isOwner: isOwnProfile,
+    });
+
+  const publicationTile = (pub: PublicationItem, rank?: number) => {
+    const title = pubTitle(pub);
+    return (
+      <div
+        key={pub.id}
+        className="lib-tile"
+        role="button"
+        tabIndex={0}
+        onClick={() => openPublication(pub)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') openPublication(pub);
+        }}
+      >
+        <MediaThumbnail url={pub.file_url} fileType={pub.file_type} showBadge={false} />
+
+        <div className="lib-tile-flags">
+          {rank !== undefined && <span className="pf-rank">#{rank}</span>}
+          {isVideoPub(pub) && (
+            <span className="lib-tile-flag" title="Video">
+              <Film size={12} />
+            </span>
+          )}
+          {!pub.is_public && (
+            <span className="lib-tile-flag private" title="Private (visible to friends)">
+              <Lock size={12} />
+            </span>
+          )}
+        </div>
+
+        <div className="lib-tile-info">
+          <h4 title={title}>{title}</h4>
+          <div className="lib-tile-sub">
+            <span className="pf-tile-stat">
+              <ThumbsUp size={11} /> {pub.likes_count}
+            </span>
+            <span className="pf-tile-stat">
+              <ThumbsDown size={11} /> {pub.dislikes_count}
+            </span>
+            {pub.tags?.slice(0, 1).map((t) => (
+              <span key={t} className="lib-tile-tag">
+                #{t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const friendButton = () => {
+    const status = profile.friendship_status;
+    const config =
+      status === 'friends'
+        ? { icon: <UserCheck size={16} />, label: 'Friends', variant: 'outline' }
+        : status === 'pending_sent'
+        ? { icon: <Clock size={16} />, label: 'Request sent', variant: 'outline' }
+        : status === 'pending_received'
+        ? { icon: <UserPlus size={16} />, label: 'Accept request', variant: 'primary' }
+        : { icon: <UserPlus size={16} />, label: 'Add friend', variant: 'primary' };
+
+    return (
+      <button
+        className={`pf-btn ${config.variant}`}
+        onClick={handleFriendAction}
+        disabled={friendActionLoading}
+        title={
+          status === 'friends'
+            ? 'Click to remove this friend'
+            : status === 'pending_sent'
+            ? 'Click to cancel your request'
+            : undefined
+        }
+      >
+        {friendActionLoading ? <Loader2 size={16} className="spin" /> : config.icon}
+        <span>{config.label}</span>
+      </button>
+    );
+  };
 
   return (
-    <div className="view-container profile-container">
-      {/* Profile Header Card */}
-      <div className="profile-hero-card">
-        <div className="profile-hero-main">
-          {/* Avatar */}
-          <div className="profile-avatar-wrapper">
-            {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.username || 'User avatar'}
-                className="profile-avatar-img"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
+    <div className="pf-page">
+      {/* Header: cover, identity, bio, stats */}
+      <header className="pf-header">
+        <div
+          className="pf-cover"
+          style={{ '--pf-hue': 195 + (hueFromString(profile.id) % 50) } as CSSProperties}
+          aria-hidden="true"
+        />
+
+        <div className="pf-identity">
+          <Avatar url={profile.avatar_url} name={profile.username} className="pf-avatar-xl" />
+
+          <div className="pf-identity-text">
+            <h1 className="pf-name">{displayName}</h1>
+            <p className="pf-meta">
+              {memberSince && (
+                <span>
+                  <CalendarDays size={14} /> Member since {memberSince}
+                </span>
+              )}
+              {profile.friendship_status === 'friends' && (
+                <span className="pf-meta-friend">
+                  <Users size={14} /> Your friend
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="pf-actions">
+            {isOwnProfile ? (
+              <button className="pf-btn outline" onClick={() => setIsEditingProfile(true)}>
+                <Pencil size={15} />
+                <span>Edit profile</span>
+              </button>
             ) : (
-              <div className="profile-avatar-fallback">
-                <span>{initial}</span>
+              friendButton()
+            )}
+          </div>
+        </div>
+
+        {profile.bio ? (
+          <p className="pf-bio">{profile.bio}</p>
+        ) : (
+          <p className="pf-bio empty">
+            {isOwnProfile ? 'No bio yet. Tell the community about your sense of humour.' : 'No bio yet.'}
+          </p>
+        )}
+
+        <dl className="pf-stats">
+          <div>
+            <dt>Publications</dt>
+            <dd>{published_count}</dd>
+          </div>
+          <div>
+            <dt>Likes received</dt>
+            <dd>{total_likes}</dd>
+          </div>
+          <div>
+            <dt>In library</dt>
+            <dd>{library_count}</dd>
+          </div>
+          <div>
+            <dt>Approval</dt>
+            <dd>{approval === null ? '–' : `${approval}%`}</dd>
+          </div>
+        </dl>
+      </header>
+
+      <div className="pf-body">
+        <main className="pf-main">
+          <div className="pf-tabs" role="tablist">
+            <button
+              role="tab"
+              aria-selected={activeTab === 'publications'}
+              className={`pf-tab ${activeTab === 'publications' ? 'active' : ''}`}
+              onClick={() => setActiveTab('publications')}
+            >
+              <Images size={16} />
+              <span>Publications</span>
+              <span className="pf-tab-count">{publications.length}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === 'comments'}
+              className={`pf-tab ${activeTab === 'comments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('comments')}
+            >
+              <MessageSquare size={16} />
+              <span>Guestbook</span>
+              <span className="pf-tab-count">{totalComments}</span>
+            </button>
+          </div>
+
+          {/* Tab 1: Publications */}
+          {activeTab === 'publications' &&
+            (loadingPubs ? (
+              <div className="loading-state">
+                <Loader2 size={28} className="spin" />
+                <p>Loading publications...</p>
               </div>
-            )}
-          </div>
-
-          {/* User Details */}
-          <div className="profile-meta-details">
-            <div className="profile-title-row">
-              <h2 className="profile-username">
-                {profile.username || 'Anonymous Meme Creator'}
-              </h2>
-
-              {isOwnProfile ? (
-                <button
-                  className="profile-action-btn edit"
-                  onClick={() => setIsEditingProfile(true)}
-                >
-                  <Pencil size={15} />
-                  <span>Edit Profile</span>
-                </button>
-              ) : (
-                <button
-                  className={`profile-action-btn friend ${profile.friendship_status}`}
-                  onClick={handleFriendAction}
-                  disabled={friendActionLoading}
-                >
-                  {friendActionLoading ? (
-                    <Loader2 size={15} className="spin" />
-                  ) : profile.friendship_status === 'friends' ? (
-                    <>
-                      <UserCheck size={15} />
-                      <span>Friends</span>
-                    </>
-                  ) : profile.friendship_status === 'pending_sent' ? (
-                    <>
-                      <UserX size={15} />
-                      <span>Request Sent</span>
-                    </>
-                  ) : profile.friendship_status === 'pending_received' ? (
-                    <>
-                      <UserPlus size={15} />
-                      <span>Accept Request</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus size={15} />
-                      <span>Add Friend</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {profile.bio ? (
-              <p className="profile-bio-text">{profile.bio}</p>
+            ) : publications.length === 0 ? (
+              <div className="empty-state-card">
+                <Images size={40} className="empty-icon" />
+                <h3>No publications yet</h3>
+                <p>
+                  {isOwnProfile
+                    ? 'Memes you upload and make public will show up here.'
+                    : `${displayName} has not published any public memes yet.`}
+                </p>
+              </div>
             ) : (
-              <p className="profile-bio-placeholder">
-                {isOwnProfile
-                  ? 'No bio yet. Click Edit Profile to tell the community about your memes!'
-                  : 'No bio provided.'}
-              </p>
-            )}
-
-            {/* Privacy Badges info */}
-            <div className="profile-badges-row">
-              {profile.allow_friends_see_private && (
-                <span className="profile-badge-pill" title="Friends can see private publications">
-                  <Lock size={12} />
-                  <span>Private shared with friends</span>
-                </span>
-              )}
-              {profile.allow_profile_comments && (
-                <span className="profile-badge-pill" title="Comments are open on this profile">
-                  <MessageSquare size={12} />
-                  <span>Guestbook open</span>
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Profile Statistics Badges */}
-        <div className="profile-stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon-wrapper blue">
-              <UploadCloud size={20} />
-            </div>
-            <div className="stat-card-text">
-              <span className="stat-number">{profile.stats.published_count}</span>
-              <span className="stat-label">Published</span>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon-wrapper green">
-              <ThumbsUp size={20} />
-            </div>
-            <div className="stat-card-text">
-              <span className="stat-number">{profile.stats.total_likes}</span>
-              <span className="stat-label">Total Likes</span>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon-wrapper red">
-              <ThumbsDown size={20} />
-            </div>
-            <div className="stat-card-text">
-              <span className="stat-number">{profile.stats.total_dislikes}</span>
-              <span className="stat-label">Total Dislikes</span>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon-wrapper purple">
-              <Library size={20} />
-            </div>
-            <div className="stat-card-text">
-              <span className="stat-number">{profile.stats.library_count}</span>
-              <span className="stat-label">In Library</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs navigation */}
-      <div className="profile-tabs-nav">
-        <button
-          className={`profile-tab-item ${activeTab === 'publications' ? 'active' : ''}`}
-          onClick={() => setActiveTab('publications')}
-        >
-          <UploadCloud size={16} />
-          <span>Publications ({publications.length})</span>
-        </button>
-
-        <button
-          className={`profile-tab-item ${activeTab === 'comments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('comments')}
-        >
-          <MessageSquare size={16} />
-          <span>Guestbook & Comments ({totalComments})</span>
-        </button>
-      </div>
-
-      {/* Tab 1: Publications */}
-      {activeTab === 'publications' && (
-        <div className="profile-tab-content">
-          {loadingPubs ? (
-            <div className="loading-state">
-              <Loader2 size={28} className="spin" />
-              <p>Loading published media...</p>
-            </div>
-          ) : publications.length === 0 ? (
-            <div className="empty-state-card">
-              <UploadCloud size={40} className="empty-icon" />
-              <h3>No publications found</h3>
-              <p>
-                {isOwnProfile
-                  ? 'You have not uploaded any media creations yet.'
-                  : 'This user has not published any public memes yet.'}
-              </p>
-            </div>
-          ) : (
-            <div className="media-grid">
-              {publications.map((pub) => {
-                const title = pub.custom_title || pub.original_title || 'Untitled Meme';
-
-                return (
-                  <div
-                    key={pub.id}
-                    className="media-card"
-                    onClick={() =>
-                      setSelectedMedia({
-                        media: {
-                          id: pub.id,
-                          file_url: pub.file_url,
-                          file_type: pub.file_type,
-                          original_title: pub.original_title || null,
-                          original_uploader_id: userId,
-                          likes_count: pub.likes_count,
-                          dislikes_count: pub.dislikes_count,
-                          user_reaction: null,
-                          created_at: pub.created_at,
-                        },
-                        isOwner: isOwnProfile,
-                      })
-                    }
-                  >
-                    <div className="media-card-thumb">
-                      <MediaThumbnail url={pub.file_url} fileType={pub.file_type} />
+              <>
+                {bestOf.length > 0 && (
+                  <section className="pf-section">
+                    <h2 className="pf-section-title">
+                      <Trophy size={16} /> Best of
+                    </h2>
+                    <div className="lib-grid tiles pf-best">
+                      {bestOf.map((pub, idx) => publicationTile(pub, idx + 1))}
                     </div>
+                  </section>
+                )}
 
-                    <div className="media-card-body">
-                      <div className="card-top-title-row">
-                        <h4 className="card-meme-title" title={title}>
-                          {title}
-                        </h4>
-                        {!pub.is_public && (
-                          <span className="card-lock-badge" title="Private publication (visible to friends)">
-                            <Lock size={12} />
-                          </span>
-                        )}
+                <section className="pf-section">
+                  <div className="pf-section-bar">
+                    <h2 className="pf-section-title">
+                      All publications
+                      <span className="pf-section-count">
+                        {visiblePubs.length === publications.length
+                          ? publications.length
+                          : `${visiblePubs.length}/${publications.length}`}
+                      </span>
+                    </h2>
+
+                    <div className="pf-section-controls">
+                      <div className="filter-pill-group">
+                        {(['all', 'image', 'video'] as const).map((f) => (
+                          <button
+                            key={f}
+                            className={`filter-pill ${pubFilter === f ? 'active' : ''}`}
+                            onClick={() => setPubFilter(f)}
+                          >
+                            {f === 'all' ? 'All' : f === 'image' ? 'Images' : 'Videos'}
+                          </button>
+                        ))}
                       </div>
-
-                      {pub.tags && pub.tags.length > 0 && (
-                        <div className="card-tags-row">
-                          {pub.tags.slice(0, 3).map((t) => (
-                            <span key={t} className="card-mini-tag">
-                              #{t}
-                            </span>
-                          ))}
-                          {pub.tags.length > 3 && (
-                            <span className="card-more-tags">+{pub.tags.length - 3}</span>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="card-reactions-bar">
-                        <span className="reaction-stat-badge like">
-                          <ThumbsUp size={12} />
-                          <span>{pub.likes_count}</span>
-                        </span>
-                        <span className="reaction-stat-badge dislike">
-                          <ThumbsDown size={12} />
-                          <span>{pub.dislikes_count}</span>
-                        </span>
-                      </div>
+                      <Select
+                        label="Sort publications by"
+                        value={pubSort}
+                        options={PUB_SORT_OPTIONS}
+                        onChange={setPubSort}
+                      />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Tab 2: Profile Comments */}
-      {activeTab === 'comments' && (
-        <div className="profile-tab-content">
-          {!profile.allow_profile_comments ? (
-            <div className="comments-disabled-banner">
-              <Lock size={20} />
-              <p>Comments are disabled by the owner of this profile.</p>
-            </div>
-          ) : (
-            <div className="profile-comments-container">
-              {/* Comment submission form */}
-              <form className="comment-post-box" onSubmit={handlePostComment}>
-                <textarea
-                  className="comment-textarea"
-                  placeholder={
-                    currentUser
-                      ? `Leave a comment on @${profile.username || 'this user'}'s wall...`
-                      : 'Connect your account to leave a comment on this profile.'
-                  }
-                  value={newCommentText}
-                  onChange={(e) => setNewCommentText(e.target.value)}
-                  disabled={!currentUser || submittingComment}
-                  rows={3}
-                  maxLength={1000}
-                />
-
-                <div className="comment-post-footer">
-                  <span className="char-count">{newCommentText.length} / 1000</span>
-                  <button
-                    type="submit"
-                    className="submit-comment-btn"
-                    disabled={!currentUser || !newCommentText.trim() || submittingComment}
-                  >
-                    {submittingComment ? (
-                      <Loader2 size={15} className="spin" />
-                    ) : (
-                      <>
-                        <Send size={14} />
-                        <span>Post Comment</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-
-              {/* Comments list */}
-              {loadingComments ? (
-                <div className="loading-state">
-                  <Loader2 size={24} className="spin" />
-                  <p>Loading guestbook comments...</p>
-                </div>
-              ) : comments.length === 0 ? (
-                <div className="empty-state-card" style={{ padding: '32px 16px' }}>
-                  <MessageSquare size={32} className="empty-icon" />
-                  <p>No comments on this profile yet. Be the first to leave one!</p>
-                </div>
-              ) : (
-                <div className="comments-stream">
-                  {comments.map((comment) => (
-                    <div key={comment.id} className="comment-card-item">
-                      <div className="comment-author-avatar">
-                        {comment.author_avatar_url ? (
-                          <img
-                            src={comment.author_avatar_url}
-                            alt={comment.author_username || 'Author'}
-                            className="comment-avatar-img"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="comment-avatar-fallback">
-                            {(comment.author_username || 'U').charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="comment-content-body">
-                        <div className="comment-header-row">
-                          <button
-                            className="comment-author-name-btn"
-                            onClick={() => onNavigateToUser?.(comment.author_id)}
-                          >
-                            @{comment.author_username || 'Anonymous'}
-                          </button>
-                          <span className="comment-timestamp">
-                            {new Date(comment.created_at).toLocaleDateString(undefined, {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-
-                          {comment.can_delete && (
-                            <button
-                              className="comment-delete-btn"
-                              onClick={() => handleDeleteComment(comment.id)}
-                              title="Delete comment"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        <p className="comment-text-paragraph">{comment.content}</p>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Pagination Controls */}
-                  {totalCommentPages > 1 && (
-                    <div className="comments-pagination-bar">
-                      <button
-                        className="pagination-btn"
-                        onClick={() => fetchComments(commentPage - 1)}
-                        disabled={commentPage <= 1 || loadingComments}
-                      >
-                        <ChevronLeft size={16} />
-                        <span>Previous</span>
-                      </button>
-
-                      <span className="page-indicator">
-                        Page {commentPage} of {totalCommentPages}
-                      </span>
-
-                      <button
-                        className="pagination-btn"
-                        onClick={() => fetchComments(commentPage + 1)}
-                        disabled={commentPage >= totalCommentPages || loadingComments}
-                      >
-                        <span>Next</span>
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
+                  {visiblePubs.length === 0 ? (
+                    <p className="pf-muted-note">Nothing in this category.</p>
+                  ) : (
+                    <div className="lib-grid tiles">{visiblePubs.map((pub) => publicationTile(pub))}</div>
                   )}
+                </section>
+              </>
+            ))}
+
+          {/* Tab 2: Guestbook */}
+          {activeTab === 'comments' &&
+            (!profile.allow_profile_comments ? (
+              <div className="empty-state-card">
+                <Lock size={32} className="empty-icon" />
+                <h3>Guestbook closed</h3>
+                <p>{isOwnProfile ? 'You have' : `${displayName} has`} turned off comments on this profile.</p>
+              </div>
+            ) : (
+              <div className="pf-guestbook">
+                <form className="pf-composer" onSubmit={handlePostComment}>
+                  <Avatar name={currentUser ? currentUsername : null} className="pf-avatar-sm" />
+                  <div className="pf-composer-body">
+                    <textarea
+                      className="comment-textarea"
+                      placeholder={
+                        currentUser
+                          ? `Write something on ${displayName}'s guestbook...`
+                          : 'Connect your account to leave a comment.'
+                      }
+                      value={newCommentText}
+                      onChange={(e) => setNewCommentText(e.target.value)}
+                      disabled={!currentUser || submittingComment}
+                      rows={2}
+                      maxLength={1000}
+                      aria-label="Your comment"
+                    />
+                    <div className="comment-post-footer">
+                      <span className="char-count">{newCommentText.length} / 1000</span>
+                      {currentUser ? (
+                        <button
+                          type="submit"
+                          className="pf-btn primary small"
+                          disabled={!newCommentText.trim() || submittingComment}
+                        >
+                          {submittingComment ? (
+                            <Loader2 size={15} className="spin" />
+                          ) : (
+                            <Send size={14} />
+                          )}
+                          <span>Post</span>
+                        </button>
+                      ) : (
+                        <button type="button" className="pf-btn primary small" onClick={onRequireAuth}>
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </form>
+
+                {loadingComments ? (
+                  <div className="loading-state">
+                    <Loader2 size={24} className="spin" />
+                    <p>Loading comments...</p>
+                  </div>
+                ) : comments.length === 0 ? (
+                  <p className="pf-muted-note">No comments yet. Be the first to leave one.</p>
+                ) : (
+                  <ul className="pf-comments">
+                    {comments.map((comment) => (
+                      <li key={comment.id} className="pf-comment">
+                        <Avatar
+                          url={comment.author_avatar_url}
+                          name={comment.author_username}
+                          className="pf-avatar-sm"
+                        />
+                        <div className="pf-comment-bubble">
+                          <div className="pf-comment-head">
+                            <button
+                              className="pf-comment-author"
+                              onClick={() => onNavigateToUser?.(comment.author_id)}
+                            >
+                              {comment.author_username || 'Anonymous'}
+                            </button>
+                            <time className="pf-comment-time" dateTime={comment.created_at}>
+                              {new Date(comment.created_at).toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </time>
+                            {comment.can_delete && (
+                              <button
+                                className="pf-comment-delete"
+                                onClick={() => handleDeleteComment(comment.id)}
+                                title="Delete comment"
+                                aria-label="Delete comment"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                          <p className="pf-comment-text">{comment.content}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {totalCommentPages > 1 && (
+                  <div className="comments-pagination-bar">
+                    <button
+                      className="pf-btn outline small"
+                      onClick={() => fetchComments(commentPage - 1)}
+                      disabled={commentPage <= 1 || loadingComments}
+                    >
+                      <ChevronLeft size={16} />
+                      <span>Previous</span>
+                    </button>
+                    <span className="page-indicator">
+                      Page {commentPage} of {totalCommentPages}
+                    </span>
+                    <button
+                      className="pf-btn outline small"
+                      onClick={() => fetchComments(commentPage + 1)}
+                      disabled={commentPage >= totalCommentPages || loadingComments}
+                    >
+                      <span>Next</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+        </main>
+
+        <aside className="pf-aside">
+          <section className="pf-card">
+            <h2 className="pf-card-title">Reputation</h2>
+            {approval === null ? (
+              <p className="pf-muted-note">No votes on their memes yet.</p>
+            ) : (
+              <>
+                <div className="pf-approval">
+                  <strong>{approval}%</strong>
+                  <span>positive across {totalVotes} vote{totalVotes > 1 ? 's' : ''}</span>
                 </div>
-              )}
-            </div>
+                <div
+                  className="pf-approval-bar"
+                  role="img"
+                  aria-label={`${total_likes} likes, ${total_dislikes} dislikes`}
+                >
+                  <span style={{ width: `${approval}%` }} />
+                </div>
+                <div className="pf-approval-legend">
+                  <span>
+                    <ThumbsUp size={13} /> {total_likes}
+                  </span>
+                  <span>
+                    <ThumbsDown size={13} /> {total_dislikes}
+                  </span>
+                </div>
+              </>
+            )}
+          </section>
+
+          {topTags.length > 0 && (
+            <section className="pf-card">
+              <h2 className="pf-card-title">Favourite tags</h2>
+              <div className="pf-tags">
+                {topTags.map(([tag, count]) => (
+                  <span key={tag} className="pf-tag">
+                    <Hash size={12} />
+                    {tag}
+                    <em>{count}</em>
+                  </span>
+                ))}
+              </div>
+            </section>
           )}
-        </div>
-      )}
+
+          <section className="pf-card">
+            <h2 className="pf-card-title">About</h2>
+            <ul className="pf-about">
+              {memberSince && (
+                <li>
+                  <CalendarDays size={15} />
+                  <span>Joined {memberSince}</span>
+                </li>
+              )}
+              <li>
+                <MessageSquare size={15} />
+                <span>Guestbook {profile.allow_profile_comments ? 'open' : 'closed'}</span>
+              </li>
+              <li>
+                <Lock size={15} />
+                <span>
+                  {profile.allow_friends_see_private
+                    ? 'Private memes shared with friends'
+                    : 'Private memes hidden from everyone'}
+                </span>
+              </li>
+            </ul>
+          </section>
+        </aside>
+      </div>
 
       {/* Edit Profile Modal */}
       {isEditingProfile && (
-        <div className="modal-backdrop" onClick={() => setIsEditingProfile(false)}>
+        <div className="modal-backdrop" onClick={closeEditModal}>
           <div className="modal-content profile-edit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Edit Profile Settings</h3>
-              <button
-                className="icon-btn"
-                onClick={() => setIsEditingProfile(false)}
-                aria-label="Close"
-              >
+              <h2>Edit profile</h2>
+              <button className="icon-btn" onClick={closeEditModal} aria-label="Close">
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="profile-edit-form">
-              <div className="form-group">
-                <label className="form-label">Username</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={editUsername}
-                  onChange={(e) => setEditUsername(e.target.value)}
-                  placeholder="Your display username"
-                  minLength={3}
-                  maxLength={30}
-                  required
-                />
-              </div>
+              <div className="avatar-upload-box">
+                <Avatar url={avatarPreview} name={editUsername} className="pf-avatar-lg" />
 
-              <div className="form-group">
-                <label className="form-label">Profile Picture (PFP)</label>
-                <div className="avatar-upload-box">
-                  <div className="avatar-edit-preview">
-                    {avatarPreview ? (
-                      <img src={avatarPreview} alt="Preview" className="avatar-edit-img" />
-                    ) : (
-                      <div className="avatar-edit-placeholder">
-                        {(editUsername || 'U').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="avatar-edit-actions">
-                    <label className="small-action-btn accent avatar-pick-btn">
+                <div className="avatar-edit-actions">
+                  <div className="avatar-edit-buttons">
+                    <label className="pf-btn primary small avatar-pick-btn">
                       <Camera size={15} />
-                      <span>{selectedAvatarFile ? 'Change Picture' : 'Upload Picture'}</span>
+                      <span>{avatarPreview ? 'Change picture' : 'Upload picture'}</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -753,36 +914,49 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
                     {avatarPreview && (
                       <button
                         type="button"
-                        className="small-action-btn danger"
+                        className="pf-btn outline small"
                         onClick={() => {
                           setSelectedAvatarFile(null);
                           setAvatarPreview(null);
                         }}
                       >
                         <Trash2 size={14} />
-                        <span>Remove Picture</span>
+                        <span>Remove</span>
                       </button>
                     )}
-
-                    <span className="form-hint">
-                      Supports PNG, JPG, WebP. Converted automatically to lightweight WebP.
-                    </span>
                   </div>
+                  <span className="form-hint">PNG, JPG or WebP. Converted to a lightweight WebP.</span>
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Bio / Description</label>
+              <label className="pf-field">
+                <span className="form-label">Username</span>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  placeholder="Your display username"
+                  minLength={3}
+                  maxLength={30}
+                  required
+                />
+              </label>
+
+              <label className="pf-field">
+                <span className="form-label">
+                  Bio
+                  <span className="form-hint">{editBio.length} / 500</span>
+                </span>
                 <textarea
                   className="form-textarea"
                   value={editBio}
                   onChange={(e) => setEditBio(e.target.value)}
-                  placeholder="A short description about yourself or your humor style..."
+                  placeholder="A short description about yourself or your humour style..."
                   rows={3}
                   maxLength={500}
                 />
-                <span className="form-hint">{editBio.length} / 500 characters</span>
-              </div>
+              </label>
 
               <div className="form-checkbox-group">
                 <label className="checkbox-row">
@@ -791,44 +965,32 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
                     checked={editAllowFriendsPrivate}
                     onChange={(e) => setEditAllowFriendsPrivate(e.target.checked)}
                   />
-                  <span>Allow friends to see my private publications</span>
+                  <span>
+                    Share private memes with friends
+                    <small>Accepted friends can see your private uploads on your profile.</small>
+                  </span>
                 </label>
-                <span className="checkbox-subtext">
-                  By default disabled. When turned on, accepted friends can see your private uploads on your profile.
-                </span>
-              </div>
 
-              <div className="form-checkbox-group">
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
                     checked={editAllowComments}
                     onChange={(e) => setEditAllowComments(e.target.checked)}
                   />
-                  <span>Enable guestbook comments on my profile</span>
+                  <span>
+                    Open my guestbook
+                    <small>Other members can leave comments on your profile.</small>
+                  </span>
                 </label>
-                <span className="checkbox-subtext">
-                  Allows other community members to write messages on your profile wall.
-                </span>
               </div>
 
               <div className="modal-actions-footer">
-                <button
-                  type="button"
-                  className="cancel-btn"
-                  onClick={() => setIsEditingProfile(false)}
-                >
+                <button type="button" className="pf-btn outline" onClick={closeEditModal}>
                   Cancel
                 </button>
-                <button type="submit" className="submit-btn" disabled={savingProfile}>
-                  {savingProfile ? (
-                    <Loader2 size={16} className="spin" />
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      <span>Save Changes</span>
-                    </>
-                  )}
+                <button type="submit" className="pf-btn primary" disabled={savingProfile}>
+                  {savingProfile ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+                  <span>Save changes</span>
                 </button>
               </div>
             </form>
