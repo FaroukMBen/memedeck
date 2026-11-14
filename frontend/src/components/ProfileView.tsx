@@ -23,6 +23,10 @@ import {
   Trophy,
   Hash,
   Users,
+  Pin,
+  PinOff,
+  Rss,
+  Activity,
 } from 'lucide-react';
 import {
   memedeckApi,
@@ -30,12 +34,14 @@ import {
   type PublicationItem,
   type ProfileComment,
   type CollectionItem,
+  type ActivityItem,
 } from '../lib/api';
 import { compressImageClientSide } from '../lib/compression';
 import { hueFromString } from '../lib/hue';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
+import { ActivityList } from './ActivityList';
 import { Select, type SelectOption } from './Select';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
 
@@ -45,7 +51,7 @@ interface ProfileViewProps {
   onNavigateToUser?: (userId: string) => void;
 }
 
-type ProfileTab = 'publications' | 'comments';
+type ProfileTab = 'publications' | 'activity' | 'comments';
 type PubSort = 'recent' | 'likes';
 type PubFilter = 'all' | 'image' | 'video';
 
@@ -55,6 +61,7 @@ const PUB_SORT_OPTIONS: SelectOption<PubSort>[] = [
 ];
 
 const BEST_OF_COUNT = 3;
+const MAX_SHOWCASE = 6;
 const MAX_TOP_TAGS = 10;
 
 function pubTitle(pub: PublicationItem): string {
@@ -135,6 +142,8 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
 
   // Friend request action loading
   const [friendActionLoading, setFriendActionLoading] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   // Comments state & pagination
   const [commentPage, setCommentPage] = useState(1);
@@ -223,6 +232,10 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
     fetchProfile();
     fetchPublications();
     fetchComments(1);
+    memedeckApi
+      .getUserActivity(userId)
+      .then((res) => setActivity(res.items))
+      .catch(() => setActivity([]));
   }, [userId, currentUser?.id]);
 
   // Handle Edit Profile submission
@@ -416,7 +429,8 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
 
   const isOwnProfile = profile.is_own_profile;
   const displayName = profile.username || 'Anonymous';
-  const { published_count, library_count, total_likes, total_dislikes } = profile.stats;
+  const { published_count, library_count, total_likes, total_dislikes, followers_count } =
+    profile.stats;
   const totalVotes = total_likes + total_dislikes;
   const approval = totalVotes > 0 ? Math.round((total_likes / totalVotes) * 100) : null;
   const memberSince = profile.created_at
@@ -429,6 +443,8 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
         id: pub.id,
         file_url: pub.file_url,
         file_type: pub.file_type,
+        source_format: pub.source_format,
+        in_library: pub.in_library,
         original_title: pub.original_title || null,
         original_uploader_id: userId,
         likes_count: pub.likes_count,
@@ -439,8 +455,62 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
       isOwner: isOwnProfile,
     });
 
+  // Pinned publications, in the order they were pinned
+  const showcase = profile.showcase_media_ids
+    .map((id) => publications.find((p) => p.id === id))
+    .filter((p): p is PublicationItem => !!p);
+
+  const handleToggleFollow = async () => {
+    if (!currentUser) {
+      onRequireAuth();
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      const res = profile.is_following
+        ? await memedeckApi.unfollowUser(userId)
+        : await memedeckApi.followUser(userId);
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_following: res.following,
+              stats: {
+                ...prev.stats,
+                followers_count: Math.max(
+                  0,
+                  prev.stats.followers_count + (res.following ? 1 : -1)
+                ),
+              },
+            }
+          : null
+      );
+    } catch (err: any) {
+      notify(err.message ?? 'Failed to update follow', 'error');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  const handleTogglePin = async (mediaId: string) => {
+    const current = profile.showcase_media_ids;
+    const isPinned = current.includes(mediaId);
+    if (!isPinned && current.length >= MAX_SHOWCASE) {
+      notify(`Your showcase is full (${MAX_SHOWCASE} memes). Unpin one first.`, 'info');
+      return;
+    }
+    const next = isPinned ? current.filter((id) => id !== mediaId) : [...current, mediaId];
+    try {
+      await memedeckApi.updateCurrentUserProfile({ showcase_media_ids: next });
+      setProfile((prev) => (prev ? { ...prev, showcase_media_ids: next } : null));
+    } catch (err: any) {
+      notify(err.message ?? 'Failed to update your showcase', 'error');
+    }
+  };
+
   const publicationTile = (pub: PublicationItem, rank?: number) => {
     const title = pubTitle(pub);
+    const isPinned = profile.showcase_media_ids.includes(pub.id);
     return (
       <div
         key={pub.id}
@@ -452,7 +522,12 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
           if (e.key === 'Enter') openPublication(pub);
         }}
       >
-        <MediaThumbnail url={pub.file_url} fileType={pub.file_type} showBadge={false} />
+        <MediaThumbnail
+          url={pub.file_url}
+          fileType={pub.file_type}
+          sourceFormat={pub.source_format}
+          showBadge={false}
+        />
 
         <div className="lib-tile-flags">
           {rank !== undefined && <span className="pf-rank">#{rank}</span>}
@@ -467,6 +542,22 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
             </span>
           )}
         </div>
+
+        {isOwnProfile && (
+          <div className="lib-tile-quick">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTogglePin(pub.id);
+              }}
+              title={isPinned ? 'Unpin from your showcase' : 'Pin to your showcase'}
+              aria-label={isPinned ? 'Unpin from your showcase' : 'Pin to your showcase'}
+              aria-pressed={isPinned}
+            >
+              {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+            </button>
+          </div>
+        )}
 
         <div className="lib-tile-info">
           <h4 title={title}>{title}</h4>
@@ -554,7 +645,23 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
                 <span>Edit profile</span>
               </button>
             ) : (
-              friendButton()
+              <>
+                <button
+                  className={`pf-btn ${profile.is_following ? 'outline' : 'primary'}`}
+                  onClick={handleToggleFollow}
+                  disabled={followBusy}
+                  aria-pressed={profile.is_following}
+                  title={
+                    profile.is_following
+                      ? 'Stop seeing their uploads in your feed'
+                      : 'See their future uploads in your feed'
+                  }
+                >
+                  {followBusy ? <Loader2 size={16} className="spin" /> : <Rss size={16} />}
+                  <span>{profile.is_following ? 'Following' : 'Follow'}</span>
+                </button>
+                {friendButton()}
+              </>
             )}
           </div>
         </div>
@@ -577,8 +684,8 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
             <dd>{total_likes}</dd>
           </div>
           <div>
-            <dt>In library</dt>
-            <dd>{library_count}</dd>
+            <dt>Followers</dt>
+            <dd>{followers_count}</dd>
           </div>
           <div>
             <dt>Approval</dt>
@@ -599,6 +706,15 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
               <Images size={16} />
               <span>Publications</span>
               <span className="pf-tab-count">{publications.length}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === 'activity'}
+              className={`pf-tab ${activeTab === 'activity' ? 'active' : ''}`}
+              onClick={() => setActiveTab('activity')}
+            >
+              <Activity size={16} />
+              <span>Activity</span>
             </button>
             <button
               role="tab"
@@ -631,7 +747,23 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
               </div>
             ) : (
               <>
-                {bestOf.length > 0 && (
+                {showcase.length > 0 && (
+                  <section className="pf-section">
+                    <h2 className="pf-section-title">
+                      <Pin size={16} /> Showcase
+                      {isOwnProfile && (
+                        <span className="pf-section-count">
+                          {showcase.length}/{MAX_SHOWCASE} pinned
+                        </span>
+                      )}
+                    </h2>
+                    <div className="lib-grid tiles pf-best">
+                      {showcase.map((pub) => publicationTile(pub))}
+                    </div>
+                  </section>
+                )}
+
+                {showcase.length === 0 && bestOf.length > 0 && (
                   <section className="pf-section">
                     <h2 className="pf-section-title">
                       <Trophy size={16} /> Best of
@@ -681,6 +813,14 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
                   )}
                 </section>
               </>
+            ))}
+
+          {/* Tab: recent public activity */}
+          {activeTab === 'activity' &&
+            (activity.length === 0 ? (
+              <p className="pf-muted-note">No recent public activity.</p>
+            ) : (
+              <ActivityList items={activity} onNavigateToUser={onNavigateToUser} />
             ))}
 
           {/* Tab 2: Guestbook */}
@@ -866,6 +1006,12 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
                   <span>Joined {memberSince}</span>
                 </li>
               )}
+              <li>
+                <Images size={15} />
+                <span>
+                  {library_count} meme{library_count === 1 ? '' : 's'} in library
+                </span>
+              </li>
               <li>
                 <MessageSquare size={15} />
                 <span>Guestbook {profile.allow_profile_comments ? 'open' : 'closed'}</span>
