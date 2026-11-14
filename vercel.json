@@ -3,7 +3,7 @@
   "services": {
     "backend": {
       "root": "backend",
-      "framework": "fastify"
+      "entrypoint": "src/server.ts"
     },
     "frontend": {
       "root": "frontend",
