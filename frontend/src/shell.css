@@ -2,14 +2,6 @@
    Storefront-style shell: navigation, library sidebar, tiles, decks, shelves.
    Loaded after index.css, so rules here refine the base styles.
    ========================================================================== */
-body {
-  background:
-    radial-gradient(1100px 480px at 15% -10%, rgba(124, 92, 255, 0.13), transparent 70%),
-    radial-gradient(900px 420px at 95% 0%, rgba(56, 132, 255, 0.08), transparent 70%),
-    var(--bg);
-  background-attachment: fixed;
-}
-
 .topbar {
   position: sticky;
   top: 0;
@@ -29,9 +21,7 @@ body {
   border: none;
   border-radius: 0;
   padding: 0 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
@@ -47,7 +37,7 @@ body {
   right: 1rem;
   bottom: 0;
   height: 3px;
-  border-radius: 3px 3px 0 0;
+  border-radius: 0;
   background: var(--accent);
   transform: scaleX(0);
   transition: transform 0.18s ease;
@@ -69,26 +59,7 @@ select:focus-visible {
 }
 
 /* Library layout */
-.library-layout {
-  display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
-}
 
-.library-sidebar {
-  position: sticky;
-  top: 76px;
-  max-height: calc(100vh - 92px);
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
 
 .lib-search {
   display: flex;
@@ -96,7 +67,7 @@ select:focus-visible {
   gap: 0.5rem;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0 0.65rem;
   color: var(--muted);
   transition: border-color 0.15s ease;
@@ -122,132 +93,21 @@ select:focus-visible {
   background: var(--surface);
 }
 
-.lib-nav-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 
-.lib-nav-heading {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 0 0.5rem 0.35rem;
-}
 
-.lib-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--muted);
-  padding: 0.42rem 0.5rem;
-  font-size: 0.86rem;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
 
-.lib-nav-item svg {
-  flex-shrink: 0;
-}
 
-.lib-nav-item:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
 
-.lib-nav-item.active {
-  background: rgba(124, 92, 255, 0.18);
-  color: #fff;
-}
 
-.lib-nav-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.lib-nav-count {
-  font-size: 0.74rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
 
-.lib-nav-empty {
-  font-size: 0.78rem;
-  color: var(--muted);
-  padding: 0.2rem 0.5rem;
-}
 
-.library-main {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
-}
 
-.lib-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
-}
 
-.lib-toolbar-title {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.25rem;
-  font-weight: 700;
-  min-width: 0;
-}
 
-.lib-toolbar-count {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
 
-.lib-toolbar-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-}
 
-.lib-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 
-.lib-sort select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 0.84rem;
-  padding: 0.4rem 0.6rem;
-  cursor: pointer;
-}
 
 .filter-pill.icon-only {
   display: grid;
@@ -270,7 +130,7 @@ select:focus-visible {
 .lib-tile {
   position: relative;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: #050608;
   border: 1px solid var(--border);
   cursor: pointer;
@@ -292,9 +152,9 @@ select:focus-visible {
 
 .lib-tile:hover,
 .lib-tile:focus-within {
-  transform: translateY(-3px) scale(1.015);
-  border-color: rgba(124, 92, 255, 0.7);
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(124, 92, 255, 0.35);
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: var(--hover-shadow);
   z-index: 1;
 }
 
@@ -322,7 +182,7 @@ select:focus-visible {
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
 }
@@ -353,7 +213,7 @@ select:focus-visible {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(10, 12, 18, 0.85);
   color: #fff;
@@ -400,7 +260,7 @@ select:focus-visible {
 }
 
 .lib-tile-tag {
-  color: #b9a8ff;
+  color: var(--accent);
 }
 
 /* Collection deck tiles */
@@ -415,24 +275,23 @@ select:focus-visible {
   position: relative;
   aspect-ratio: 1;
   overflow: hidden;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: linear-gradient(
-    150deg,
-    hsl(var(--deck-hue) 55% 38%),
-    hsl(calc(var(--deck-hue) + 40) 50% 18%)
-  );
+  border: none;
+  /* Each deck keeps its own hue, shown only as a spine along the bottom edge */
+  border-bottom: 5px solid hsl(var(--deck-hue) 85% 60%);
+  border-radius: var(--radius);
+  /* Deck covers stay dark in every theme: they are image tiles, not panels */
+  background: #17181c;
   color: #fff;
   cursor: pointer;
   padding: 0;
   font: inherit;
-  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .deck-tile:hover {
-  transform: translateY(-3px) scale(1.015);
-  border-color: hsl(var(--deck-hue) 80% 70%);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
+  transform: translateY(-4px);
+  border-bottom-color: var(--highlight);
+  box-shadow: var(--hover-shadow);
 }
 
 .deck-mosaic {
@@ -456,17 +315,24 @@ select:focus-visible {
   height: 100%;
   min-height: 0;
   object-fit: cover;
-  border-radius: 4px;
+  filter: grayscale(1) contrast(1.1);
+  transition: filter 0.25s ease;
+}
+
+.deck-tile:hover .deck-mosaic img,
+.deck-tile:hover .deck-mosaic video {
+  filter: none;
 }
 
 .deck-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    150deg,
-    hsl(var(--deck-hue) 60% 30% / 0.78),
-    hsl(calc(var(--deck-hue) + 40) 55% 12% / 0.9)
-  );
+  background: rgb(10 10 11 / 0.72);
+  transition: background 0.25s ease;
+}
+
+.deck-tile:hover .deck-shade {
+  background: rgb(10 10 11 / 0.5);
 }
 
 .deck-label {
@@ -511,7 +377,7 @@ select:focus-visible {
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: rgba(0, 0, 0, 0.45);
 }
 
@@ -522,7 +388,7 @@ select:focus-visible {
   justify-content: center;
   gap: 0.75rem;
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px dashed var(--border-strong);
   color: var(--text);
   font-size: 0.9rem;
   font-weight: 700;
@@ -532,8 +398,9 @@ select:focus-visible {
 }
 
 .deck-tile.deck-create:hover {
-  background: rgba(124, 92, 255, 0.1);
-  border-color: var(--accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--on-accent);
 }
 
 .deck-empty-hint {
@@ -573,7 +440,7 @@ select:focus-visible {
   place-items: center;
   width: 36px;
   height: 72px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--muted);
@@ -582,7 +449,7 @@ select:focus-visible {
 }
 
 .featured-arrow:hover {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -591,11 +458,11 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1.9fr) minmax(220px, 1fr);
   height: 340px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--card-shadow);
   cursor: pointer;
   animation: featuredIn 0.35s ease-out;
 }
@@ -634,7 +501,7 @@ select:focus-visible {
   gap: 0.75rem;
   padding: 1.25rem;
   min-width: 0;
-  background: linear-gradient(160deg, rgba(124, 92, 255, 0.16), transparent 60%);
+  background: var(--surface);
 }
 
 .featured-side h3 {
@@ -654,7 +521,7 @@ select:focus-visible {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #b9a8ff;
+  color: var(--accent);
 }
 
 .featured-stats {
@@ -683,7 +550,7 @@ select:focus-visible {
   height: 8px;
   padding: 0;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius);
   background: var(--border);
   cursor: pointer;
   transition: background 0.15s ease;
@@ -711,28 +578,33 @@ select:focus-visible {
   gap: 0.15rem;
   min-height: 84px;
   padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: linear-gradient(
-    160deg,
-    hsl(var(--tile-hue) 50% 22%),
-    hsl(var(--tile-hue) 65% 40%)
-  );
-  color: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  /* The tag's own hue lives in the left spine only */
+  border-left: 5px solid hsl(var(--tile-hue) 85% 60%);
+  background: var(--surface);
+  color: var(--text);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.15s ease, filter 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 .tag-tile:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.15);
+  transform: translateX(3px);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  border-left-color: hsl(var(--tile-hue) 85% 60%);
 }
 
 .tag-tile.active {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px hsl(var(--tile-hue) 80% 65% / 0.6);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.tag-tile.active .tag-tile-count {
+  color: var(--on-accent);
 }
 
 .tag-tile-name {
@@ -744,8 +616,9 @@ select:focus-visible {
 }
 
 .tag-tile-count {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.8);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
 }
 
 .feed-bar {
@@ -793,17 +666,17 @@ select:focus-visible {
   align-items: center;
   gap: 0.35rem;
   margin-left: 0.5rem;
-  background: rgba(124, 92, 255, 0.18);
-  border: 1px solid rgba(124, 92, 255, 0.45);
-  color: #d6ccff;
-  border-radius: 999px;
+  background: rgb(var(--accent-rgb) / 0.18);
+  border: 1px solid rgb(var(--accent-rgb) / 0.45);
+  color: var(--accent);
+  border-radius: var(--radius-pill);
   padding: 0.25rem 0.6rem;
   font-size: 0.8rem;
   cursor: pointer;
 }
 
 .active-tag-chip:hover {
-  background: rgba(124, 92, 255, 0.3);
+  background: rgb(var(--accent-rgb) / 0.3);
 }
 
 .card-tag-pill.clickable {
@@ -813,8 +686,8 @@ select:focus-visible {
 }
 
 .card-tag-pill.clickable:hover {
-  background: rgba(124, 92, 255, 0.28);
-  color: #fff;
+  background: rgb(var(--accent-rgb) / 0.28);
+  color: var(--text);
 }
 
 @media (max-width: 900px) {
@@ -834,14 +707,7 @@ select:focus-visible {
     padding: 1rem;
   }
 
-  .library-layout {
-    grid-template-columns: 1fr;
-  }
 
-  .library-sidebar {
-    position: static;
-    max-height: 260px;
-  }
 
   .featured-card {
     grid-template-columns: 1fr;

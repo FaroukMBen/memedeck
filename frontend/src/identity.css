@@ -1,0 +1,764 @@
+/* ==========================================================================
+   MemeDeck default identity: "Riso", a printed zine.
+
+   Tokens live in :root in index.css. This file holds what tokens can't say:
+     - paper: cream stock with a faint halftone dot screen
+     - type: Fraunces (chunky serif) for headings, DM Sans for everything else
+     - ink: thin blue-black rules, dashed "coupon" dividers, no blurred shadows
+     - spot colours used the way a two-colour press would: yellow marker
+       swipes behind text, a pink misregistered ghost behind raised things,
+       blue overprint on deck covers
+     - stamps: small tilted labels for badges
+     - shared components: checkboxes, confirmation dialog, toasts
+
+   The dark "Volt" identity is in themes/volt.css and overrides all of this.
+   ========================================================================== */
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+body {
+  /* Halftone screen printed across the page */
+  background:
+    radial-gradient(rgb(31 35 68 / 0.075) 1px, transparent 1.3px) 0 0 / 13px 13px,
+    var(--bg);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: var(--highlight);
+  color: var(--on-highlight);
+}
+
+/* --- Type ----------------------------------------------------------------- */
+h1,
+h2,
+h3,
+h4,
+.stat-number,
+.tag-tile-name,
+.deck-tile {
+  font-family: var(--font-display);
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+}
+
+/* Page titles carry the pink misprint ghost */
+.view-header h2 {
+  font-size: 2.3rem;
+  font-weight: 800;
+  line-height: 1.05;
+  text-shadow: 0.055em 0.05em 0 rgb(255 95 168 / 0.6);
+}
+
+.card-meme-title,
+.lib-tile-info h4 {
+  font-family: var(--font-body);
+  font-weight: 700;
+}
+
+/* --- Brand ---------------------------------------------------------------- */
+.brand {
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.brand-mark {
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.brand-word i {
+  font-style: normal;
+  margin: 0 0.04em;
+  color: var(--spot);
+}
+
+/* --- Rules and paper edges ------------------------------------------------ */
+.topbar {
+  border-bottom: 1.5px solid var(--border-strong);
+}
+
+.feed-bar,
+.lib-toolbar,
+.pf-tabs {
+  border-bottom: 1.5px dashed var(--border-strong);
+}
+
+.media-card,
+.library-sidebar,
+.comment-card-item,
+.modal-content,
+.add-library-modal-box,
+.featured-card {
+  border: 1.5px solid var(--border-strong);
+}
+
+.media-card,
+.library-sidebar {
+  box-shadow: var(--card-shadow);
+}
+
+.empty-state-card {
+  background: transparent;
+  border: 1.5px dashed var(--border-strong);
+}
+
+.modal-backdrop,
+.dialog-backdrop {
+  background: rgb(31 35 68 / 0.5);
+  backdrop-filter: none;
+}
+
+/* --- Yellow marker -------------------------------------------------------- */
+/* Section titles get a marker swipe through their lower half */
+.shelf-title {
+  align-self: flex-start;
+  padding: 0 0.2em;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  background: linear-gradient(transparent 58%, var(--highlight) 58% 92%, transparent 92%);
+}
+
+
+
+
+.user-avatar-circle,
+.comment-avatar-fallback,
+.avatar-edit-placeholder {
+  background: var(--highlight);
+  color: var(--on-highlight);
+  font-family: var(--font-display);
+}
+
+.nav-btn {
+  font-weight: 600;
+}
+
+.nav-btn::after {
+  height: 4px;
+  background: var(--spot);
+}
+
+.feed-tab {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.feed-tab.active {
+  border-bottom-color: var(--spot);
+}
+
+/* --- Stamps: small tilted labels ------------------------------------------ */
+.file-type-badge {
+  background: var(--highlight);
+  backdrop-filter: none;
+  color: var(--on-highlight);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 3px;
+  transform: rotate(-3deg);
+}
+
+.file-type-badge.large {
+  transform: rotate(-2deg);
+}
+
+.featured-kicker {
+  align-self: flex-start;
+  padding: 0.2rem 0.55rem;
+  border: 1.5px solid var(--spot);
+  border-radius: 3px;
+  color: var(--text);
+  letter-spacing: 0.08em;
+  transform: rotate(-2deg);
+}
+
+.lib-tile-flag,
+.deck-privacy {
+  border-radius: 3px;
+}
+
+/* Tags are perforated tickets */
+.card-tag-pill,
+.card-mini-tag,
+.detail-tag-chip,
+.tag-chip,
+.pf-tag {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: 3px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.card-tag-pill.clickable {
+  border: 1px dashed var(--border-strong);
+}
+
+.card-tag-pill.clickable:hover {
+  background: var(--highlight);
+  border-style: solid;
+  color: var(--on-highlight);
+}
+
+.active-tag-chip {
+  background: var(--highlight);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 3px;
+  color: var(--on-highlight);
+}
+
+.active-tag-chip:hover {
+  background: var(--spot);
+}
+
+.lib-tile-tag {
+  color: var(--highlight);
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+/* Primary: a block of blue ink that turns to plain ink under the cursor */
+.add-media-btn,
+.submit-btn,
+.submit-comment-btn,
+.small-action-btn.accent,
+.pf-btn.primary,
+.dialog-btn.primary {
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-weight: 700;
+}
+
+.add-media-btn:hover {
+  transform: none;
+}
+
+/* Secondary: ink outline that fills with marker yellow */
+.connect-btn,
+.fork-btn,
+.small-action-btn:not(.accent):not(.danger),
+.pagination-btn,
+.pf-btn.outline,
+.dialog-btn:not(.primary):not(.danger) {
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.connect-btn:hover,
+.fork-btn:hover:not(:disabled):not(.forked),
+.small-action-btn:not(.accent):not(.danger):hover:not(:disabled),
+.pagination-btn:hover:not(:disabled),
+.pf-btn.outline:hover:not(:disabled),
+.dialog-btn:not(.primary):not(.danger):hover {
+  background: var(--highlight);
+  border-color: var(--border-strong);
+  color: var(--on-highlight);
+}
+
+.filter-pill-group {
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.filter-pill {
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.user-profile-badge {
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.status-pill {
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.vote-btn,
+.mini-vote-btn {
+  background: transparent;
+  border-color: var(--border-strong);
+}
+
+.vote-btn.like.active,
+.mini-vote-btn.like.active {
+  background: var(--success);
+  border-color: var(--border-strong);
+  color: #fff;
+}
+
+.vote-btn.dislike.active,
+.mini-vote-btn.dislike.active {
+  background: var(--danger);
+  border-color: var(--border-strong);
+  color: #fff;
+}
+
+.lib-tile-quick button:hover {
+  background: var(--highlight);
+  color: var(--on-highlight);
+}
+
+.lib-tile-quick button.danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* --- Fields --------------------------------------------------------------- */
+.form-group input,
+.form-input,
+.form-textarea,
+.comment-textarea,
+.fork-title-input,
+.tags-input-container,
+.lib-search {
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.lib-search:focus-within,
+.form-group input:focus,
+.form-input:focus,
+.form-textarea:focus,
+.comment-textarea:focus {
+  border-color: var(--border-strong);
+  box-shadow: 3px 3px 0 var(--highlight);
+}
+
+/* --- Decks and tag tiles: overprint --------------------------------------- */
+/* Covers print in two inks: a greyscale plate under a solid blue one */
+.deck-shade {
+  background: var(--accent);
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+}
+
+.deck-tile:hover .deck-shade {
+  background: var(--spot);
+}
+
+.deck-tile:hover .deck-mosaic img,
+.deck-tile:hover .deck-mosaic video {
+  filter: grayscale(1) contrast(1.1);
+}
+
+.deck-tile:not(.deck-create) {
+  background: var(--accent);
+  border: 1.5px solid var(--border-strong);
+  border-bottom-width: 6px;
+}
+
+.deck-tile:hover {
+  border-bottom-color: var(--border-strong);
+}
+
+.deck-label {
+  text-shadow: none;
+}
+
+.deck-label h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.15;
+}
+
+.deck-tile.deck-create {
+  border: 1.5px dashed var(--border-strong);
+  font-family: var(--font-body);
+  letter-spacing: 0.06em;
+}
+
+.deck-tile.deck-create:hover {
+  background: var(--highlight);
+  border: 1.5px solid var(--border-strong);
+  color: var(--on-highlight);
+  box-shadow: none;
+}
+
+.tag-tile {
+  border: 1.5px solid var(--border-strong);
+  border-left-width: 6px;
+}
+
+.tag-tile-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.tag-tile.active {
+  background: var(--highlight);
+  border-color: var(--border-strong);
+  color: var(--on-highlight);
+}
+
+.tag-tile.active .tag-tile-count {
+  color: var(--on-highlight);
+}
+
+/* --- Featured ------------------------------------------------------------- */
+.featured-card {
+  box-shadow: 6px 6px 0 var(--accent);
+}
+
+.featured-side {
+  border-left: 1.5px dashed var(--border-strong);
+}
+
+.featured-side h3 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.featured-arrow {
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+  color: var(--text);
+}
+
+.featured-arrow:hover {
+  background: var(--highlight);
+  border-color: var(--border-strong);
+  color: var(--on-highlight);
+}
+
+.featured-dots button {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+}
+
+.featured-dots button.active {
+  background: var(--spot);
+}
+
+/* --- Checkboxes ----------------------------------------------------------- */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0.1rem 0 0;
+  display: inline-grid;
+  place-content: center;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: min(var(--radius), 4px);
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* The tick: a clipped square that scales in */
+input[type='checkbox']::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: var(--on-accent);
+  clip-path: polygon(14% 44%, 0 65%, 42% 100%, 100% 20%, 84% 6%, 40% 66%);
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+
+input[type='checkbox']:hover {
+  box-shadow: 2px 2px 0 var(--highlight);
+}
+
+input[type='checkbox']:checked {
+  background: var(--accent);
+}
+
+input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Each option is a tappable row; ticking it swipes it with marker */
+.checkbox-label,
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.checkbox-label:hover,
+.checkbox-row:hover {
+  background: var(--surface-hover);
+}
+
+.checkbox-label:has(input:checked),
+.checkbox-row:has(input:checked) {
+  border-style: solid;
+  background: rgb(255 207 63 / 0.28);
+}
+
+.checkbox-row > span {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.form-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* --- Confirmation dialog -------------------------------------------------- */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  animation: dialogFade 0.15s ease-out;
+}
+
+.dialog-box {
+  width: 100%;
+  max-width: 400px;
+  padding: 1.75rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 8px 8px 0 var(--accent);
+  animation: dialogPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dialog-box.danger {
+  box-shadow: 8px 8px 0 var(--danger);
+}
+
+.dialog-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  background: var(--highlight);
+  color: var(--on-highlight);
+  margin-bottom: 0.25rem;
+  transform: rotate(-6deg);
+}
+
+.dialog-box.danger .dialog-icon {
+  background: var(--danger);
+  color: #fff;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.dialog-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.dialog-btn {
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.dialog-btn.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.dialog-btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.dialog-btn.danger {
+  background: var(--danger);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: #fff;
+  font-weight: 700;
+}
+
+.dialog-btn.danger:hover {
+  background: var(--text);
+}
+
+@keyframes dialogFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogPop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) rotate(-1.5deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* --- Toasts --------------------------------------------------------------- */
+.toast-stack {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(380px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.8rem 0.85rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-left: 6px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 4px 4px 0 rgb(31 35 68 / 0.2);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  pointer-events: auto;
+  animation: toastIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast.error {
+  border-left-color: var(--danger);
+}
+
+.toast.success {
+  border-left-color: var(--success);
+}
+
+.toast-icon {
+  display: grid;
+  place-items: center;
+  margin-top: 0.05rem;
+  color: var(--accent);
+}
+
+.toast.error .toast-icon {
+  color: var(--danger-text);
+}
+
+.toast.success .toast-icon {
+  color: var(--success-text);
+}
+
+.toast-message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  padding: 0.15rem;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  background: var(--highlight);
+  color: var(--on-highlight);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .view-header h2 {
+    font-size: 1.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop,
+  .dialog-box,
+  .toast {
+    animation: none;
+  }
+}

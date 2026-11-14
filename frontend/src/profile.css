@@ -1,0 +1,724 @@
+/* ==========================================================================
+   Profile page.
+   Layout: header (cover, avatar, identity, bio, stats) then a two-column
+   body with the content tabs on the left and context cards on the right.
+   ========================================================================== */
+
+.pf-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* --- Avatars -------------------------------------------------------------- */
+.pf-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-round);
+  object-fit: cover;
+  background: var(--surface-hover);
+}
+
+.pf-avatar-fallback {
+  display: grid;
+  place-items: center;
+  background: var(--highlight);
+  color: var(--on-highlight);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  user-select: none;
+}
+
+.pf-avatar-sm {
+  width: 38px;
+  height: 38px;
+}
+
+.pf-avatar-lg {
+  width: 76px;
+  height: 76px;
+  font-size: 1.8rem;
+}
+
+.pf-avatar-xl {
+  width: 132px;
+  height: 132px;
+  font-size: 3.2rem;
+  border: 4px solid var(--surface);
+  outline: 1.5px solid var(--border-strong);
+  box-shadow: 7px 7px 0 var(--spot);
+}
+
+/* --- Header --------------------------------------------------------------- */
+.pf-header {
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+/* Cover: a per-user blue, with the brand's diagonal slash as a faint pattern */
+.pf-cover {
+  --pf-hue: 212;
+  height: 168px;
+  border-bottom: 1.5px solid var(--border-strong);
+  /* A halftone plate: yellow dots fading out over the user's own blue */
+  background:
+    linear-gradient(100deg, transparent 35%, hsl(var(--pf-hue) 70% 50%) 92%),
+    radial-gradient(var(--highlight) 34%, transparent 36%) 0 0 / 18px 18px,
+    hsl(var(--pf-hue) 70% 50%);
+}
+
+.pf-identity {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+  padding: 0 1.75rem;
+  margin-top: -62px;
+}
+
+.pf-identity-text {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 0.35rem;
+}
+
+.pf-name {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 900;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.pf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.pf-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pf-meta-friend {
+  color: var(--success-text);
+  font-weight: 600;
+}
+
+.pf-actions {
+  padding-bottom: 0.5rem;
+}
+
+.pf-bio {
+  margin: 1.1rem 1.75rem 0;
+  max-width: 68ch;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.pf-bio.empty {
+  color: var(--muted);
+}
+
+.pf-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1.4rem 0 0;
+  border-top: 1.5px dashed var(--border-strong);
+}
+
+.pf-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+  padding: 1rem 1.75rem;
+}
+
+.pf-stats > div + div {
+  border-left: 1.5px dashed var(--border-strong);
+}
+
+.pf-stats dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.pf-stats dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+.pf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.pf-btn.small {
+  padding: 0.42rem 0.9rem;
+  font-size: 0.82rem;
+}
+
+.pf-btn.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.pf-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.pf-btn.outline {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.pf-btn.outline:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.pf-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* --- Body layout ---------------------------------------------------------- */
+.pf-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.pf-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.pf-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: sticky;
+  top: 76px;
+}
+
+/* --- Tabs ----------------------------------------------------------------- */
+.pf-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  margin-bottom: -1px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+
+.pf-tab:hover {
+  color: var(--text);
+}
+
+.pf-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--spot);
+}
+
+.pf-tab-count {
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-tab.active .pf-tab-count {
+  background: var(--highlight);
+  color: var(--on-highlight);
+}
+
+/* --- Sections ------------------------------------------------------------- */
+.pf-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pf-section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.pf-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.pf-section-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-section-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.pf-muted-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Best-of podium: three wide tiles */
+.lib-grid.tiles.pf-best {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lib-grid.tiles.pf-best .lib-tile {
+  aspect-ratio: 4 / 3;
+}
+
+.pf-rank {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  padding: 0 0.45rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 3px;
+  transform: rotate(-4deg);
+  background: var(--highlight);
+  color: var(--on-highlight);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.pf-tile-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+/* --- Side cards ----------------------------------------------------------- */
+.pf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem 1.2rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+}
+
+.pf-card-title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-approval {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pf-approval strong {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* Likes fill from the left; whatever is left over is the dislike share */
+.pf-approval-bar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  overflow: hidden;
+}
+
+.pf-approval-bar span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+  border-right: 2px solid var(--surface);
+}
+
+.pf-approval-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-approval-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pf-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 3px;
+  background: rgb(var(--accent-rgb) / 0.1);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pf-tag svg {
+  color: var(--muted);
+}
+
+.pf-tag em {
+  margin-left: 0.25rem;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-about {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+.pf-about li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  line-height: 1.4;
+}
+
+.pf-about svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--muted);
+}
+
+/* --- Guestbook ------------------------------------------------------------ */
+.pf-guestbook {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.pf-composer {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+}
+
+.pf-composer-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pf-composer .comment-textarea {
+  width: 100%;
+  background: var(--bg);
+}
+
+.pf-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf-comment {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.pf-comment-bubble {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.95rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  /* Squared corner points at the author's avatar */
+  border-radius: 4px var(--radius) var(--radius) var(--radius);
+}
+
+.pf-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pf-comment-author {
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pf-comment-author:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.pf-comment-time {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.pf-comment-delete {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  padding: 0.25rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-round);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pf-comment-delete:hover {
+  background: rgb(229 72 77 / 0.12);
+  color: var(--danger-text);
+}
+
+.pf-comment-text {
+  margin: 0.3rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* --- Edit profile modal --------------------------------------------------- */
+.profile-edit-form {
+  margin-top: 0;
+  padding: 1.25rem 1.5rem 1.5rem;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.avatar-upload-box {
+  background: var(--bg);
+}
+
+.avatar-edit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.form-hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: min(var(--radius), 10px);
+  color: var(--text);
+  font-size: 0.92rem;
+  outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.15);
+}
+
+.checkbox-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.checkbox-row small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.modal-actions-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 0.25rem;
+}
+
+/* --- Responsive ----------------------------------------------------------- */
+@media (max-width: 900px) {
+  .pf-body {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-aside {
+    position: static;
+  }
+
+  .pf-cover {
+    height: 120px;
+  }
+
+  .pf-identity {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0 1.1rem;
+    margin-top: -52px;
+  }
+
+  .pf-avatar-xl {
+    width: 104px;
+    height: 104px;
+    font-size: 2.5rem;
+  }
+
+  .pf-name {
+    font-size: 1.5rem;
+  }
+
+  .pf-actions {
+    padding-bottom: 0;
+  }
+
+  .pf-bio {
+    margin: 0.9rem 1.1rem 0;
+  }
+
+  .pf-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pf-stats > div {
+    padding: 0.8rem 1.1rem;
+  }
+
+  .pf-stats > div:nth-child(odd) {
+    border-left: none;
+  }
+
+  .pf-stats > div:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+
+  .lib-grid.tiles.pf-best {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
