@@ -73,14 +73,4 @@ export async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
-let defaultApp: FastifyInstance | null = null;
-
-export default async function handler(req: any, res: any): Promise<void> {
-  if (!defaultApp) {
-    defaultApp = await buildApp();
-    await defaultApp.ready();
-  }
-  defaultApp.server.emit('request', req, res);
-}
-
 

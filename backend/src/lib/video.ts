@@ -3,14 +3,25 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import ffmpegStatic from 'ffmpeg-static';
 
-const getFfmpegBinary = (): string | null => {
-  if (typeof ffmpegStatic === 'string') return ffmpegStatic;
-  if (ffmpegStatic && typeof (ffmpegStatic as any).default === 'string') {
-    return (ffmpegStatic as any).default;
+let ffmpegBinaryPath: string | null = null;
+let ffmpegChecked = false;
+
+const getFfmpegBinary = async (): Promise<string | null> => {
+  if (ffmpegChecked) return ffmpegBinaryPath;
+  ffmpegChecked = true;
+  try {
+    const mod = await import('ffmpeg-static');
+    const bin = (mod as any).default ?? mod;
+    if (typeof bin === 'string') {
+      ffmpegBinaryPath = bin;
+    } else if (bin && typeof bin.default === 'string') {
+      ffmpegBinaryPath = bin.default;
+    }
+  } catch {
+    ffmpegBinaryPath = null;
   }
-  return null;
+  return ffmpegBinaryPath;
 };
 
 export interface ProcessedMedia {
@@ -49,7 +60,7 @@ export async function compressVideoOrGif(
     };
   }
 
-  const ffmpegBinary = getFfmpegBinary();
+  const ffmpegBinary = await getFfmpegBinary();
 
   // If ffmpeg binary is missing for any reason, safely pass through
   if (!ffmpegBinary) {

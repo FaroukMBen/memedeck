@@ -10,7 +10,6 @@ import {
 import { memedeckApi } from './lib/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FeedbackProvider } from './context/FeedbackContext';
-import { Analytics } from '@vercel/analytics/react';
 import { AuthModal } from './components/AuthModal';
 import { UploadModal } from './components/UploadModal';
 import { DiscoverView } from './components/DiscoverView';
@@ -221,7 +220,6 @@ export default function App() {
     <AuthProvider>
       <FeedbackProvider>
         <AppContent />
-        <Analytics />
       </FeedbackProvider>
     </AuthProvider>
   );
