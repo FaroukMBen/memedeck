@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Compass,
   FolderHeart,
@@ -7,7 +7,6 @@ import {
   Plus,
   User as UserIcon,
 } from 'lucide-react';
-import { memedeckApi } from './lib/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FeedbackProvider } from './context/FeedbackContext';
 import { AuthModal } from './components/AuthModal';
@@ -23,16 +22,8 @@ function AppContent() {
   const { user, username, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('discover');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
-  const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-
-  useEffect(() => {
-    memedeckApi
-      .health()
-      .then(() => setApiStatus('online'))
-      .catch(() => setApiStatus('offline'));
-  }, []);
 
   const handleNavigateToUser = (targetUserId: string) => {
     setProfileUserId(targetUserId);
@@ -139,20 +130,6 @@ function AppContent() {
               <span>Connect</span>
             </button>
           )}
-
-          {/* Backend Status indicator */}
-          <div className="status-pill" title="Fastify Backend Connection">
-            <span
-              className={`status-dot ${
-                apiStatus === 'online'
-                  ? 'online'
-                  : apiStatus === 'offline'
-                  ? 'offline'
-                  : ''
-              }`}
-            />
-            API: {apiStatus}
-          </div>
         </div>
       </header>
 
