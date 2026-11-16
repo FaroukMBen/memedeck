@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc && node -e \"import('fs').then(fs => fs.writeFileSync('dist/package.json', JSON.stringify({ type: 'module' })))\"",
+    "build": "esbuild src/app.ts src/server.ts --bundle --platform=node --format=esm --outdir=dist --external:ffmpeg-static && node -e \"import('fs').then(fs => fs.writeFileSync('dist/package.json', JSON.stringify({ type: 'module' })))\"",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
