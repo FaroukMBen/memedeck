@@ -230,6 +230,29 @@ select {
   padding: 0.2rem 0.5rem;
 }
 
+.lib-nav-more-tags-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.3rem;
+  transition: all 0.15s ease;
+}
+
+.lib-nav-more-tags-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--accent-hover, var(--text));
+}
+
 .library-main {
   display: flex;
   flex-direction: column;

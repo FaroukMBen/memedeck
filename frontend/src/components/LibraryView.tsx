@@ -4,7 +4,6 @@ import {
   Lock,
   Trash2,
   Plus,
-  Loader2,
   Library,
   Pencil,
   Search,
@@ -16,6 +15,8 @@ import {
   Hash,
   Zap,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   memedeckApi,
@@ -27,6 +28,7 @@ import { useFeedback } from '../context/FeedbackContext';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
 import { MediaThumbnail } from './MediaThumbnail';
 import { Select, type SelectOption } from './Select';
+import { LibraryGridSkeleton, useServerWakeup } from './Skeleton';
 
 interface LibraryViewProps {
   onRequireAuth: () => void;
@@ -37,9 +39,10 @@ type SortKey = 'added' | 'title' | 'likes';
 type ViewMode = 'tiles' | 'mosaic';
 
 const VIEW_MODE_KEY = 'memedeck.library.viewMode';
-const MAX_SIDEBAR_TAGS = 12;
 const SHELVES_KEY = 'memedeck.library.shelves';
 const SHELF_SIZE = 12;
+const TAGS_PREVIEW_LIMIT = 5;
+const COLLECTIONS_PREVIEW_LIMIT = 3;
 
 /** Shelf ids: 'recent', 'top', or 'col:<collection id>' */
 function readShelves(): string[] {
@@ -86,10 +89,13 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('added');
   const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
+  const [showAllTags, setShowAllTags] = useState(false);
+  const [showAllCollections, setShowAllCollections] = useState(false);
 
   // Members of the collection currently selected in the sidebar
   const [colMembers, setColMembers] = useState<Set<string> | null>(null);
   const [colLoading, setColLoading] = useState(false);
+  const isWakingUp = useServerWakeup(loading || colLoading);
 
   // Shelves pinned above the grid, and the members of collection shelves
   const [shelves, setShelves] = useState<string[]>(readShelves);
@@ -233,7 +239,7 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
     [validItems]
   );
 
-  const topTags = useMemo(() => {
+  const allTags = useMemo(() => {
     const tagCounts = new Map<string, number>();
     for (const item of validItems) {
       for (const tag of item.tags ?? []) {
@@ -241,9 +247,22 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
       }
     }
     return [...tagCounts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, MAX_SIDEBAR_TAGS);
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [validItems]);
+
+  const displayedCollections = useMemo(() => {
+    if (showAllCollections || collections.length <= COLLECTIONS_PREVIEW_LIMIT) {
+      return collections;
+    }
+    return collections.slice(0, COLLECTIONS_PREVIEW_LIMIT);
+  }, [collections, showAllCollections]);
+
+  const displayedTags = useMemo(() => {
+    if (showAllTags || allTags.length <= TAGS_PREVIEW_LIMIT) {
+      return allTags;
+    }
+    return allTags.slice(0, TAGS_PREVIEW_LIMIT);
+  }, [allTags, showAllTags]);
 
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/^#/, '');
@@ -377,21 +396,63 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
           {collections.length === 0 ? (
             <span className="lib-nav-empty">No collections yet</span>
           ) : (
-            collections.map((col) =>
-              navItem(
-                `col:${col.id}`,
-                col.rule ? <Zap size={15} /> : <FolderHeart size={15} />,
-                col.title,
-                col.item_count
-              )
-            )
+            <>
+              {displayedCollections.map((col) =>
+                navItem(
+                  `col:${col.id}`,
+                  col.rule ? <Zap size={15} /> : <FolderHeart size={15} />,
+                  col.title,
+                  col.item_count
+                )
+              )}
+
+              {collections.length > COLLECTIONS_PREVIEW_LIMIT && (
+                <button
+                  type="button"
+                  className="lib-nav-more-tags-btn"
+                  onClick={() => setShowAllCollections((prev) => !prev)}
+                >
+                  {showAllCollections ? (
+                    <>
+                      <ChevronUp size={13} />
+                      <span>Voir moins</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={13} />
+                      <span>Voir + ({collections.length - COLLECTIONS_PREVIEW_LIMIT})</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
 
-        {topTags.length > 0 && (
+        {allTags.length > 0 && (
           <div className="lib-nav-section">
             <span className="lib-nav-heading">Top Tags</span>
-            {topTags.map(([tag, count]) => navItem(`tag:${tag}`, <Hash size={15} />, tag, count))}
+            {displayedTags.map(([tag, count]) => navItem(`tag:${tag}`, <Hash size={15} />, tag, count))}
+
+            {allTags.length > TAGS_PREVIEW_LIMIT && (
+              <button
+                type="button"
+                className="lib-nav-more-tags-btn"
+                onClick={() => setShowAllTags((prev) => !prev)}
+              >
+                {showAllTags ? (
+                  <>
+                    <ChevronUp size={13} />
+                    <span>Voir moins</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={13} />
+                    <span>Voir + ({allTags.length - TAGS_PREVIEW_LIMIT})</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
       </aside>
@@ -448,10 +509,7 @@ export function LibraryView({ onRequireAuth, onOpenUpload }: LibraryViewProps) {
         </div>
 
         {loading || colLoading ? (
-          <div className="loading-state">
-            <Loader2 size={32} className="spin" />
-            <p>Loading your library...</p>
-          </div>
+          <LibraryGridSkeleton count={12} viewMode={viewMode} isWakingUp={isWakingUp} />
         ) : counts.all === 0 ? (
           <div className="empty-state-card">
             <Library size={40} className="empty-icon" />
