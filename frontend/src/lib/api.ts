@@ -116,6 +116,12 @@ export interface ProfileCommentsResponse {
   total_pages: number;
 }
 
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+}
+
 export interface MediaItem {
   id: string;
   file_url: string;
@@ -341,39 +347,71 @@ export const memedeckApi = {
     apiFetch<null>(`/api/v1/collections/${collectionId}/items/${userMediaId}`, {
       method: 'DELETE',
     }),
-  uploadMedia: async (options: {
+  uploadMedia: (options: {
     file: File;
     title?: string;
     tags?: string[];
     isPublic?: boolean;
     isNsfw?: boolean;
+    onProgress?: (progress: UploadProgress) => void;
   }): Promise<{ media: MediaItem; user_media: UserMediaItem }> => {
-    const { file, title, tags, isPublic = true, isNsfw = false } = options;
-    const formData = new FormData();
-    formData.append('file', file);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const { file, title, tags, isPublic = true, isNsfw = false, onProgress } = options;
+        const formData = new FormData();
+        formData.append('file', file);
 
-    const query = new URLSearchParams({
-      is_public: String(isPublic),
-      is_nsfw: String(isNsfw),
+        const query = new URLSearchParams({
+          is_public: String(isPublic),
+          is_nsfw: String(isNsfw),
+        });
+        if (title?.trim()) query.set('title', title.trim());
+        if (tags && tags.length > 0) query.set('tags', tags.join(','));
+
+        const authHeaders = await getAuthHeaders();
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            const percent = Math.min(100, Math.max(0, Math.round((event.loaded / event.total) * 100)));
+            onProgress({
+              loaded: event.loaded,
+              total: event.total,
+              percent,
+            });
+          }
+        };
+
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText || '{}');
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(json);
+            } else {
+              reject(new Error(json.message ?? `Upload failed (${xhr.status})`));
+            }
+          } catch {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve({} as any);
+            } else {
+              reject(new Error(`Upload failed (${xhr.status})`));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network error during media upload. Check your connection.'));
+        };
+
+        xhr.open('POST', `${API_BASE}/api/v1/medias/upload?${query.toString()}`);
+        for (const [header, val] of Object.entries(authHeaders)) {
+          xhr.setRequestHeader(header, val);
+        }
+        xhr.send(formData);
+      } catch (err) {
+        reject(err);
+      }
     });
-    if (title?.trim()) query.set('title', title.trim());
-    if (tags && tags.length > 0) query.set('tags', tags.join(','));
-
-    const authHeaders = await getAuthHeaders();
-    const response = await fetch(`${API_BASE}/api/v1/medias/upload?${query.toString()}`, {
-      method: 'POST',
-      headers: {
-        ...authHeaders,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.message ?? `Upload failed (${response.status})`);
-    }
-
-    return response.json();
   },
 
   // Profile & User endpoints

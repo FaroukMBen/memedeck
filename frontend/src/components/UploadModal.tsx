@@ -1,6 +1,6 @@
 import { useState, useRef, type FormEvent, type ChangeEvent, type DragEvent, type KeyboardEvent } from 'react';
-import { UploadCloud, X, CheckCircle2, Film, Image as ImageIcon, Zap, Tag, ShieldAlert } from 'lucide-react';
-import { memedeckApi } from '../lib/api';
+import { UploadCloud, X, CheckCircle2, Film, Image as ImageIcon, Zap, Tag, ShieldAlert, Loader2, Sparkles } from 'lucide-react';
+import { memedeckApi, type UploadProgress } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { compressImageClientSide, type CompressionResult } from '../lib/compression';
 
@@ -24,6 +24,7 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
   const [isDragging, setIsDragging] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +103,7 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
     setTags([]);
     setTagInput('');
     setCompressionInfo(null);
+    setUploadProgress(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -142,6 +144,7 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
 
     setLoading(true);
     setError(null);
+    setUploadProgress({ loaded: 0, total: file.size, percent: 0 });
 
     try {
       await memedeckApi.uploadMedia({
@@ -150,6 +153,9 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
         tags,
         isPublic,
         isNsfw,
+        onProgress: (progress) => {
+          setUploadProgress(progress);
+        },
       });
       setSuccess(true);
       setTimeout(() => {
@@ -160,6 +166,7 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
       }, 1200);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to upload media');
+      setUploadProgress(null);
     } finally {
       setLoading(false);
     }
@@ -169,6 +176,91 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
     clearSelection();
     onClose();
   };
+
+  // Dedicated upload progress dialog when uploading or on success
+  if (loading || success) {
+    return (
+      <div className="modal-backdrop upload-dialog-backdrop">
+        <div className="modal-content upload-dialog-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="upload-dialog-body">
+            {!success ? (
+              <>
+                <div className="upload-dialog-icon-wrapper">
+                  {uploadProgress && uploadProgress.percent === 100 ? (
+                    <div className="upload-dialog-spin-ring">
+                      <Sparkles size={30} className="upload-spin-icon" />
+                    </div>
+                  ) : (
+                    <div className="upload-dialog-pulse-ring">
+                      <UploadCloud size={30} className="upload-pulse-icon" />
+                    </div>
+                  )}
+                </div>
+
+                <h3 className="upload-dialog-title">
+                  {uploadProgress && uploadProgress.percent === 100
+                    ? 'Processing on Server...'
+                    : 'Uploading to Library...'}
+                </h3>
+
+                <p className="upload-dialog-subtitle">
+                  {uploadProgress && uploadProgress.percent === 100
+                    ? 'Fastify & FFmpeg are optimizing the media for fast playback.'
+                    : 'Please keep this window open while your media is uploading.'}
+                </p>
+
+                {file && (
+                  <div className="upload-dialog-file-pill">
+                    {file.type.startsWith('video/') ? <Film size={14} /> : <ImageIcon size={14} />}
+                    <span className="upload-dialog-filename">{title.trim() || file.name}</span>
+                    <span className="upload-dialog-filesize">
+                      {(file.size / (1024 * 1024)).toFixed(1)} MB
+                    </span>
+                  </div>
+                )}
+
+                <div className="upload-dialog-progress-card">
+                  <div className="upload-progress-header">
+                    <span className="upload-percent">
+                      {uploadProgress ? `${uploadProgress.percent}%` : '0%'}
+                    </span>
+                    <span className="upload-bytes">
+                      {uploadProgress
+                        ? `${(uploadProgress.loaded / (1024 * 1024)).toFixed(1)} / ${(uploadProgress.total / (1024 * 1024)).toFixed(1)} MB`
+                        : `${file ? (file.size / (1024 * 1024)).toFixed(1) : 0} MB`}
+                    </span>
+                  </div>
+
+                  <div className="upload-progress-track">
+                    <div
+                      className={`upload-progress-fill ${uploadProgress && uploadProgress.percent === 100 ? 'server-processing' : ''}`}
+                      style={{ width: `${Math.max(4, uploadProgress?.percent ?? 0)}%` }}
+                    >
+                      <span className="upload-progress-shine" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="upload-dialog-lock">
+                  <span>🔒 Form locked during upload</span>
+                </div>
+              </>
+            ) : (
+              <div className="upload-dialog-success">
+                <div className="upload-success-icon-box">
+                  <CheckCircle2 size={42} className="upload-success-check" />
+                </div>
+                <h3 className="upload-dialog-title">Upload Complete!</h3>
+                <p className="upload-dialog-subtitle">
+                  Media has been successfully added to your library.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-backdrop" onClick={handleModalClose}>
@@ -331,13 +423,16 @@ export function UploadModal({ isOpen, onClose, onUploaded, onRequireAuth }: Uplo
             <button
               type="submit"
               className="submit-btn"
-              disabled={loading || compressing || !file || success}
+              disabled={loading || compressing || !file}
             >
-              {compressing
-                ? 'Optimizing media...'
-                : loading
-                ? 'Uploading...'
-                : 'Upload to Library'}
+              {compressing ? (
+                <>
+                  <Loader2 size={16} className="spin" />
+                  <span>Optimizing media client-side...</span>
+                </>
+              ) : (
+                'Upload to Library'
+              )}
             </button>
           </form>
         )}

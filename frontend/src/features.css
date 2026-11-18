@@ -243,3 +243,451 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Upload Progress Dialog & Stages
+   ========================================================================== */
+.upload-dialog-backdrop {
+  z-index: 1200;
+  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.upload-dialog-modal {
+  max-width: 440px;
+  width: 100%;
+  padding: 2.2rem 1.8rem;
+  text-align: center;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45), var(--pop-shadow);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  animation: slide-down-banner 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.upload-dialog-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.upload-dialog-icon-wrapper {
+  margin-bottom: 1.1rem;
+}
+
+.upload-dialog-pulse-ring,
+.upload-dialog-spin-ring {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-round);
+  background: rgb(var(--accent-rgb, 42 69 216) / 0.12);
+  border: 2px solid var(--accent);
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.upload-dialog-pulse-ring {
+  animation: radar-ripple 2.4s infinite ease-out;
+}
+
+.upload-dialog-title {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-display, inherit);
+}
+
+.upload-dialog-subtitle {
+  margin: 0 0 1.2rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.45;
+  max-width: 340px;
+}
+
+.upload-dialog-file-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.85rem;
+  margin-bottom: 1.4rem;
+  font-size: 0.82rem;
+  max-width: 100%;
+}
+
+.upload-dialog-filename {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.upload-dialog-filesize {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.upload-dialog-progress-card {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.2rem;
+}
+
+.upload-dialog-lock {
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.upload-dialog-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fade-in 0.3s ease-out;
+  padding: 1rem 0;
+}
+
+.upload-success-icon-box {
+  width: 70px;
+  height: 70px;
+  border-radius: var(--radius-round);
+  background: rgba(31, 138, 76, 0.12);
+  border: 2px solid var(--success);
+  display: grid;
+  place-items: center;
+  color: var(--success);
+  margin-bottom: 1.2rem;
+  animation: bounce-check 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.upload-success-check {
+  color: var(--success);
+}
+
+@keyframes bounce-check {
+  0% { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.upload-progress-box {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-top: 0.6rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  animation: fade-in 0.25s ease-out;
+}
+
+.upload-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+  font-size: 0.86rem;
+}
+
+.upload-progress-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.upload-pulse-icon {
+  color: var(--accent);
+  animation: upload-icon-pulse 1.4s infinite ease-in-out;
+}
+
+.upload-spin-icon {
+  color: var(--accent);
+  animation: spin 3s infinite linear;
+}
+
+.upload-progress-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.upload-percent {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.upload-bytes {
+  color: var(--muted);
+}
+
+.upload-progress-track {
+  height: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover, #2a45d8));
+  border-radius: var(--radius-pill);
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-progress-fill.server-processing {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--accent),
+    var(--accent) 12px,
+    var(--spot, #ff5fa8) 12px,
+    var(--spot, #ff5fa8) 24px
+  );
+  background-size: 200% 100%;
+  animation: progress-stripe 1.2s linear infinite;
+}
+
+.upload-progress-shine {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 35px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: shine-sweep 1.6s infinite ease-in-out;
+}
+
+.upload-server-hint {
+  margin: 0.6rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.4;
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes progress-stripe {
+  0% { background-position: 0 0; }
+  100% { background-position: 48px 0; }
+}
+
+@keyframes shine-sweep {
+  0% { transform: translateX(-150%); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateX(200%); opacity: 0; }
+}
+
+@keyframes upload-icon-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
+
+/* ==========================================================================
+   Skeleton System & Animations
+   ========================================================================== */
+.skeleton-box {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-hover) 40%,
+    var(--surface) 80%
+  );
+  background-size: 250% 100%;
+  animation: skeleton-shimmer 1.8s infinite ease-in-out;
+  display: block;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-grid-wrapper {
+  width: 100%;
+  animation: fade-in 0.3s ease-out;
+}
+
+.skeleton-card {
+  pointer-events: none;
+  user-select: none;
+  cursor: default;
+}
+
+.skeleton-hero {
+  pointer-events: none;
+  margin-bottom: 2rem;
+}
+
+.skeleton-shelf {
+  margin-bottom: 2rem;
+}
+
+.skeleton-featured-card {
+  pointer-events: none;
+  cursor: default;
+}
+
+.skeleton-tag-tile {
+  pointer-events: none;
+  cursor: default;
+}
+
+.featured-dot-skeleton {
+  pointer-events: none;
+}
+
+.skeleton-tag-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: hidden;
+}
+
+.skeleton-tile {
+  pointer-events: none;
+  user-select: none;
+}
+
+.skeleton-deck-tile {
+  pointer-events: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* ==========================================================================
+   Server Wakeup Banner (Render cold start ~30s notification)
+   ========================================================================== */
+.server-wakeup-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.75rem;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 18px rgb(var(--accent-rgb, 42 69 216) / 0.12), var(--card-shadow);
+  animation: slide-down-banner 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.server-wakeup-icon-box {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--accent-rgb, 42 69 216) / 0.14);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.server-wakeup-radar {
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--accent);
+  animation: radar-ripple 2s infinite cubic-bezier(0.1, 0.8, 0.3, 1);
+  pointer-events: none;
+}
+
+.server-wakeup-icon {
+  z-index: 1;
+}
+
+.server-wakeup-bolt {
+  color: var(--accent);
+  animation: bolt-flicker 1.8s infinite ease-in-out;
+}
+
+.server-wakeup-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.server-wakeup-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+
+.server-wakeup-pill {
+  font-size: 0.72rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 0.3rem;
+}
+
+.server-wakeup-desc {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+@keyframes slide-down-banner {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes radar-ripple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes bolt-flicker {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.9); }
+}
+
+.loading-waking-hint {
+  font-size: 0.82rem;
+  color: var(--accent);
+  margin-top: 0.5rem;
+  font-weight: 500;
+  animation: fade-in 0.4s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
