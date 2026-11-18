@@ -44,6 +44,7 @@ import { MediaThumbnail } from './MediaThumbnail';
 import { ActivityList } from './ActivityList';
 import { Select, type SelectOption } from './Select';
 import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal';
+import { ProfileSkeleton, useServerWakeup } from './Skeleton';
 
 interface ProfileViewProps {
   userId: string;
@@ -121,6 +122,7 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
   const [loadingPubs, setLoadingPubs] = useState(true);
   const [loadingComments, setLoadingComments] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const isWakingUp = useServerWakeup(loadingProfile);
 
   // Section tab and publication browsing
   const [activeTab, setActiveTab] = useState<ProfileTab>('publications');
@@ -407,10 +409,7 @@ export function ProfileView({ userId, onRequireAuth, onNavigateToUser }: Profile
   if (loadingProfile) {
     return (
       <div className="view-container">
-        <div className="loading-state">
-          <Loader2 size={36} className="spin" />
-          <p>Loading profile...</p>
-        </div>
+        <ProfileSkeleton isWakingUp={isWakingUp} />
       </div>
     );
   }

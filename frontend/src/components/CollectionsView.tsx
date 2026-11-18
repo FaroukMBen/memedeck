@@ -27,6 +27,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../context/FeedbackContext';
 import { MediaThumbnail } from './MediaThumbnail';
 import { Select, type SelectOption } from './Select';
+import { DeckGridSkeleton, useServerWakeup } from './Skeleton';
 
 type CollectionScope = 'public' | 'mine' | 'subscribed';
 type RuleTypeChoice = 'any' | 'image' | 'video';
@@ -57,6 +58,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const [scope, setScope] = useState<CollectionScope>('public');
   const filterMine = scope === 'mine';
   const [loading, setLoading] = useState(true);
+  const isWakingUp = useServerWakeup(loading);
 
   // Detail view state
   const [selectedColId, setSelectedColId] = useState<string | null>(null);
@@ -445,10 +447,14 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
       </div>
 
       {loading ? (
-        <div className="loading-state">
-          <Loader2 size={32} className="spin" />
-          <p>Loading collections...</p>
-        </div>
+        <DeckGridSkeleton
+          count={5}
+          isWakingUp={isWakingUp}
+          onCreateClick={() => {
+            if (!user) onRequireAuth();
+            else setIsCreateOpen(true);
+          }}
+        />
       ) : (
         <>
           <div className="deck-grid">

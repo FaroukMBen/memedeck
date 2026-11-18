@@ -21,6 +21,7 @@ import { MediaDetailModal, type SelectedMediaContext } from './MediaDetailModal'
 import { AddToLibraryModal } from './AddToLibraryModal';
 import { MediaThumbnail } from './MediaThumbnail';
 import { ActivityList } from './ActivityList';
+import { DiscoverSectionsSkeleton, MediaCardSkeleton, useServerWakeup } from './Skeleton';
 
 interface DiscoverViewProps {
   onRequireAuth: () => void;
@@ -54,6 +55,7 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const isWakingUp = useServerWakeup(loading);
   const [filter, setFilter] = useState<TypeFilter>('all');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [feedTab, setFeedTab] = useState<FeedTab>('new');
@@ -272,8 +274,12 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
         </div>
       </div>
 
-      {/* Featured carousel */}
-      {showFeatured && featuredItem && (
+      {loading && medias.length === 0 ? (
+        <DiscoverSectionsSkeleton isWakingUp={isWakingUp} feedTab={feedTab} filter={filter} />
+      ) : (
+        <>
+          {/* Featured carousel */}
+          {showFeatured && featuredItem && (
         <section className="shelf">
           <h3 className="shelf-title">Featured &amp; Popular</h3>
           <div
@@ -447,9 +453,10 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
         </div>
 
         {loading ? (
-          <div className="loading-state">
-            <Loader2 size={32} className="spin" />
-            <p>Loading community media...</p>
+          <div className="media-grid">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <MediaCardSkeleton key={idx} index={idx} />
+            ))}
           </div>
         ) : medias.length === 0 && !isBrowsing && filter === 'all' ? (
           <div className="empty-state-card">
@@ -569,6 +576,8 @@ export function DiscoverView({ onRequireAuth, onOpenUpload, onNavigateToUser }: 
           </>
         )}
       </section>
+      </>
+      )}
 
       {/* Media Detail Inspection Modal */}
       <MediaDetailModal
