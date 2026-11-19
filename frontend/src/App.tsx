@@ -6,6 +6,7 @@ import {
   LogOut,
   Plus,
   User as UserIcon,
+  Users,
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FeedbackProvider } from './context/FeedbackContext';
@@ -14,9 +15,10 @@ import { UploadModal } from './components/UploadModal';
 import { DiscoverView } from './components/DiscoverView';
 import { LibraryView } from './components/LibraryView';
 import { CollectionsView } from './components/CollectionsView';
+import { CommunityView } from './components/CommunityView';
 import { ProfileView } from './components/ProfileView';
 
-type Tab = 'discover' | 'library' | 'collections' | 'profile';
+type Tab = 'discover' | 'library' | 'collections' | 'community' | 'profile';
 
 function AppContent() {
   const { user, username, signOut } = useAuth();
@@ -54,8 +56,8 @@ function AppContent() {
             className={`nav-btn ${activeTab === 'discover' ? 'active' : ''}`}
             onClick={() => setActiveTab('discover')}
           >
-            <Compass size={16} />
-            Discover
+            <Compass size={17} />
+            <span className="nav-label">Discover</span>
           </button>
           <button
             className={`nav-btn ${activeTab === 'library' ? 'active' : ''}`}
@@ -67,22 +69,29 @@ function AppContent() {
               }
             }}
           >
-            <Library size={16} />
-            My Library
+            <Library size={17} />
+            <span className="nav-label">My Library</span>
           </button>
           <button
             className={`nav-btn ${activeTab === 'collections' ? 'active' : ''}`}
             onClick={() => setActiveTab('collections')}
           >
-            <FolderHeart size={16} />
-            Collections
+            <FolderHeart size={17} />
+            <span className="nav-label">Collections</span>
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'community' ? 'active' : ''}`}
+            onClick={() => setActiveTab('community')}
+          >
+            <Users size={17} />
+            <span className="nav-label">Community</span>
           </button>
         </nav>
 
         <div className="nav-actions">
           {/* + Add Media to Library */}
           <button
-            className="add-media-btn"
+            className="add-media-btn topbar-add-btn"
             onClick={() => {
               if (!user) {
                 setIsAuthModalOpen(true);
@@ -91,24 +100,24 @@ function AppContent() {
               }
             }}
             title="Add Media to Library"
+            aria-label="Add Media to Library"
           >
             <Plus size={16} />
-            <span>Add Media</span>
+            <span className="add-media-label">Add Media</span>
           </button>
 
           {/* User Authentication state */}
           {user ? (
             <div
-              className={`user-profile-badge clickable ${
-                activeTab === 'profile' && profileUserId === user.id ? 'active' : ''
-              }`}
+              className={`user-profile-badge clickable ${activeTab === 'profile' && profileUserId === user.id ? 'active' : ''
+                }`}
               onClick={() => handleNavigateToUser(user.id)}
               title="View your Creator Profile"
             >
               <span className="user-avatar-circle">
                 {(username?.[0] ?? 'U').toUpperCase()}
               </span>
-              <span>{username}</span>
+              <span className="user-profile-name">{username}</span>
               <button
                 className="signout-btn"
                 onClick={(e) => {
@@ -164,6 +173,13 @@ function AppContent() {
         {activeTab === 'collections' && (
           <CollectionsView
             onRequireAuth={() => setIsAuthModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'community' && (
+          <CommunityView
+            onRequireAuth={() => setIsAuthModalOpen(true)}
+            onNavigateToUser={handleNavigateToUser}
           />
         )}
 

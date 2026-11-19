@@ -2,9 +2,7 @@
    "Volt" theme: the dark, sharp identity (ink + Volt accent, square corners,
    chamfers, hard offset shadows, Chakra Petch / Plex Mono).
 
-   Not the default. Enable with <html data-theme="volt"> (see lib/theme.ts).
-   Everything is nested under that attribute, so none of it leaks into the
-   default theme.
+   Not the default.
    ========================================================================== */
 :root[data-theme="volt"] {
   color-scheme: dark;
@@ -171,14 +169,12 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 700;
-    clip-path: polygon(
-      0 0,
-      calc(100% - var(--chamfer)) 0,
-      100% var(--chamfer),
-      100% 100%,
-      var(--chamfer) 100%,
-      0 calc(100% - var(--chamfer))
-    );
+    clip-path: polygon(0 0,
+        calc(100% - var(--chamfer)) 0,
+        100% var(--chamfer),
+        100% 100%,
+        var(--chamfer) 100%,
+        0 calc(100% - var(--chamfer)));
   }
 
   .add-media-btn,
@@ -629,6 +625,26 @@
     }
   }
 
+  @media (max-width: 768px) {
+    .nav-tabs {
+      background: var(--surface);
+      border-top: 1px solid var(--border-strong);
+    }
+
+    .nav-btn {
+      font-size: 0.66rem;
+      letter-spacing: 0.03em;
+    }
+
+    .nav-btn::after {
+      top: 0;
+      bottom: auto;
+      left: 14%;
+      right: 14%;
+      height: 3px;
+    }
+  }
+
   /* --- Geometry the default theme rounds off ----------------------------- */
   .topbar {
     background: var(--bg);
@@ -647,13 +663,11 @@
   }
 
   .deck-tile:not(.deck-create) {
-    clip-path: polygon(
-      0 0,
-      calc(100% - var(--chamfer) * 1.6) 0,
-      100% calc(var(--chamfer) * 1.6),
-      100% 100%,
-      0 100%
-    );
+    clip-path: polygon(0 0,
+        calc(100% - var(--chamfer) * 1.6) 0,
+        100% calc(var(--chamfer) * 1.6),
+        100% 100%,
+        0 100%);
   }
 
   /* --- Undo default-theme touches that don't belong here ----------------- */
@@ -765,6 +779,7 @@
   .checkbox-row:has(input:checked) {
     background: transparent;
   }
+
   .featured-kicker {
     background: transparent;
     padding: 0;

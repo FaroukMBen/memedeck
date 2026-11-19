@@ -159,7 +159,7 @@ select {
   gap: 2px;
 }
 
-.lib-nav-section + .lib-nav-section {
+.lib-nav-section+.lib-nav-section {
   padding-top: 0.9rem;
   border-top: 1.5px dashed var(--border-strong);
 }
@@ -314,14 +314,47 @@ select {
 @media (max-width: 900px) {
   .library-layout {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
 
   .library-sidebar {
     position: static;
-    max-height: 260px;
+    max-height: none;
+    padding: 0.75rem;
+    gap: 0.65rem;
+  }
+
+  .lib-nav-section {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .lib-nav-heading {
+    width: 100%;
+    margin-bottom: 0.1rem;
+  }
+
+  .lib-nav-item {
+    width: auto;
+    padding: 0.32rem 0.6rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+  }
+
+  .lib-nav-more-tags-btn {
+    width: auto;
+    margin-top: 0;
+    padding: 0.32rem 0.6rem;
   }
 
   .lib-toolbar-title {
     font-size: 1.5rem;
+  }
+
+  .lib-toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
