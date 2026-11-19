@@ -169,7 +169,7 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
         .from('users')
         .update(updatePayload)
         .eq('id', userId)
-        .select('id, email, username, avatar_url, bio, allow_friends_see_private, allow_profile_comments, is_library_public, created_at')
+        .select('*')
         .single();
 
       if (error || !data) {

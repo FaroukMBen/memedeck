@@ -8,6 +8,16 @@ const errorSchema = z.object({
   message: z.string(),
 });
 
+const communityUserSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string().nullable(),
+  avatar_url: z.string().nullable(),
+  bio: z.string().nullable(),
+  created_at: z.string().nullable(),
+  friendship_status: z.enum(['none', 'pending_sent', 'pending_received', 'friends', 'self']),
+  is_following: z.boolean(),
+});
+
 const activitySchema = z.object({
   id: z.string().uuid(),
   type: z.enum(['upload', 'fork', 'collection', 'like']),
@@ -309,6 +319,221 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         .slice(0, limit);
 
       return { items: await hydrateActivities(rows) };
+    }
+  );
+
+  // Search and browse community users
+  server.get(
+    '/api/v1/users',
+    {
+      preHandler: [app.optionalAuth],
+      schema: {
+        tags: ['Social'],
+        summary: 'Search and discover community members',
+        querystring: z.object({
+          q: z.string().optional(),
+          limit: z.coerce.number().int().min(1).max(50).default(24),
+        }),
+        response: {
+          200: z.object({ items: z.array(communityUserSchema) }),
+          500: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const callerId = request.user?.id;
+      const { q, limit } = request.query;
+
+      let query = supabaseAdmin
+        .from('users')
+        .select('id, username, avatar_url, bio')
+        .order('username', { ascending: true })
+        .limit(limit);
+
+      const trimmed = q?.trim();
+      if (trimmed) {
+        query = query.ilike('username', `%${trimmed}%`);
+      }
+
+      const { data: usersData, error } = await query;
+      if (error) {
+        return reply.status(500).send({ error: 'DatabaseError', message: error.message });
+      }
+
+      const users = usersData ?? [];
+      if (users.length === 0) {
+        return { items: [] };
+      }
+
+      const friendshipMap = new Map<string, 'pending_sent' | 'pending_received' | 'friends'>();
+      const followingSet = new Set<string>();
+
+      if (callerId) {
+        const [friendshipsRes, followsRes] = await Promise.all([
+          supabaseAdmin
+            .from('friendships')
+            .select('requester_id, addressee_id, status')
+            .or(`requester_id.eq.${callerId},addressee_id.eq.${callerId}`),
+          supabaseAdmin
+            .from('user_follows')
+            .select('followed_id')
+            .eq('follower_id', callerId),
+        ]);
+
+        for (const f of friendshipsRes.data ?? []) {
+          const otherId = f.requester_id === callerId ? f.addressee_id : f.requester_id;
+          if (f.status === 'accepted') {
+            friendshipMap.set(otherId, 'friends');
+          } else if (f.status === 'pending') {
+            friendshipMap.set(
+              otherId,
+              f.requester_id === callerId ? 'pending_sent' : 'pending_received'
+            );
+          }
+        }
+
+        for (const fw of followsRes.data ?? []) {
+          followingSet.add(fw.followed_id);
+        }
+      }
+
+      const items = users.map((u: any) => ({
+        id: u.id,
+        username: u.username ?? null,
+        avatar_url: u.avatar_url ?? null,
+        bio: u.bio ?? null,
+        created_at: null,
+        friendship_status:
+          callerId && u.id === callerId
+            ? ('self' as const)
+            : (friendshipMap.get(u.id) ?? ('none' as const)),
+        is_following: followingSet.has(u.id),
+      }));
+
+      return { items };
+    }
+  );
+
+  // Get caller's friends, pending requests, and followed users
+  server.get(
+    '/api/v1/friends',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        tags: ['Social'],
+        summary: 'List friends, incoming/outgoing friend requests, and followed users',
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: z.object({
+            friends: z.array(communityUserSchema),
+            incoming_requests: z.array(communityUserSchema),
+            outgoing_requests: z.array(communityUserSchema),
+            following: z.array(communityUserSchema),
+          }),
+          500: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const callerId = request.user!.id;
+
+      const [friendshipsRes, followsRes] = await Promise.all([
+        supabaseAdmin
+          .from('friendships')
+          .select('requester_id, addressee_id, status')
+          .or(`requester_id.eq.${callerId},addressee_id.eq.${callerId}`),
+        supabaseAdmin
+          .from('user_follows')
+          .select('followed_id')
+          .eq('follower_id', callerId),
+      ]);
+
+      if (friendshipsRes.error) {
+        return reply.status(500).send({
+          error: 'DatabaseError',
+          message: friendshipsRes.error.message,
+        });
+      }
+
+      const friendshipMap = new Map<string, 'pending_sent' | 'pending_received' | 'friends'>();
+      const followingSet = new Set<string>();
+      const allTargetIds = new Set<string>();
+
+      for (const f of friendshipsRes.data ?? []) {
+        const otherId = f.requester_id === callerId ? f.addressee_id : f.requester_id;
+        allTargetIds.add(otherId);
+        if (f.status === 'accepted') {
+          friendshipMap.set(otherId, 'friends');
+        } else if (f.status === 'pending') {
+          friendshipMap.set(
+            otherId,
+            f.requester_id === callerId ? 'pending_sent' : 'pending_received'
+          );
+        }
+      }
+
+      for (const fw of followsRes.data ?? []) {
+        if (fw.followed_id !== callerId) {
+          followingSet.add(fw.followed_id);
+          allTargetIds.add(fw.followed_id);
+        }
+      }
+
+      if (allTargetIds.size === 0) {
+        return {
+          friends: [],
+          incoming_requests: [],
+          outgoing_requests: [],
+          following: [],
+        };
+      }
+
+      const { data: usersData, error: usersErr } = await supabaseAdmin
+        .from('users')
+        .select('id, username, avatar_url, bio')
+        .in('id', [...allTargetIds]);
+
+      if (usersErr) {
+        return reply.status(500).send({ error: 'DatabaseError', message: usersErr.message });
+      }
+
+      const userById = new Map<string, any>();
+      for (const u of usersData ?? []) {
+        userById.set(u.id, {
+          id: u.id,
+          username: u.username ?? null,
+          avatar_url: u.avatar_url ?? null,
+          bio: u.bio ?? null,
+          created_at: null,
+          friendship_status: friendshipMap.get(u.id) ?? ('none' as const),
+          is_following: followingSet.has(u.id),
+        });
+      }
+
+      const friends: any[] = [];
+      const incoming_requests: any[] = [];
+      const outgoing_requests: any[] = [];
+      const following: any[] = [];
+
+      for (const [id, status] of friendshipMap.entries()) {
+        const profile = userById.get(id);
+        if (!profile) continue;
+        if (status === 'friends') friends.push(profile);
+        else if (status === 'pending_received') incoming_requests.push(profile);
+        else if (status === 'pending_sent') outgoing_requests.push(profile);
+      }
+
+      for (const id of followingSet) {
+        const profile = userById.get(id);
+        if (profile) following.push(profile);
+      }
+
+      return {
+        friends,
+        incoming_requests,
+        outgoing_requests,
+        following,
+      };
     }
   );
 }
