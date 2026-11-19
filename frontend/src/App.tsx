@@ -74,7 +74,13 @@ function AppContent() {
           </button>
           <button
             className={`nav-btn ${activeTab === 'collections' ? 'active' : ''}`}
-            onClick={() => setActiveTab('collections')}
+            onClick={() => {
+              if (!user) {
+                setIsAuthModalOpen(true);
+              } else {
+                setActiveTab('collections');
+              }
+            }}
           >
             <FolderHeart size={17} />
             <span className="nav-label">Collections</span>

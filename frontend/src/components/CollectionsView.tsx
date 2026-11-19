@@ -29,7 +29,7 @@ import { MediaThumbnail } from './MediaThumbnail';
 import { Select, type SelectOption } from './Select';
 import { DeckGridSkeleton, useServerWakeup } from './Skeleton';
 
-type CollectionScope = 'public' | 'mine' | 'subscribed';
+type CollectionScope = 'mine' | 'subscribed';
 type RuleTypeChoice = 'any' | 'image' | 'video';
 
 const RULE_TYPE_OPTIONS: SelectOption<RuleTypeChoice>[] = [
@@ -55,8 +55,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const { user } = useAuth();
   const { confirm, notify } = useFeedback();
   const [collections, setCollections] = useState<CollectionItem[]>([]);
-  const [scope, setScope] = useState<CollectionScope>('public');
-  const filterMine = scope === 'mine';
+  const [scope, setScope] = useState<CollectionScope>('mine');
   const [loading, setLoading] = useState(true);
   const isWakingUp = useServerWakeup(loading);
 
@@ -68,7 +67,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   // Create Collection modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newIsPublic, setNewIsPublic] = useState(true);
+  const [newIsPublic, setNewIsPublic] = useState(false);
   const [creating, setCreating] = useState(false);
   // Dynamic rule fields of the create form
   const [newDynamic, setNewDynamic] = useState(false);
@@ -82,12 +81,17 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
   const [drawingRandom, setDrawingRandom] = useState(false);
 
   const fetchCollections = async () => {
+    if (!user) {
+      setCollections([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res =
         scope === 'subscribed'
           ? await memedeckApi.getSubscribedCollections()
-          : await memedeckApi.getCollections(filterMine);
+          : await memedeckApi.getCollections(true);
       setCollections(res.items);
     } catch {
       setCollections([]);
@@ -98,7 +102,7 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
 
   useEffect(() => {
     fetchCollections();
-  }, [scope]);
+  }, [scope, user?.id]);
 
   const handleOpenCollection = async (col: CollectionItem) => {
     setSelectedColId(col.id);
@@ -396,49 +400,52 @@ export function CollectionsView({ onRequireAuth }: CollectionsViewProps) {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="view-container">
+        <div className="empty-state-card">
+          <FolderHeart size={40} className="empty-icon" />
+          <h2>My Collections</h2>
+          <p>
+            Connect your account to access and organize your personal meme collections and decks.
+          </p>
+          <button className="submit-btn" style={{ maxWidth: 220 }} onClick={onRequireAuth}>
+            Connect or Sign Up
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="view-container">
       <div className="view-header">
         <div>
-          <h2>Modular Collections</h2>
+          <h2>My Collections</h2>
           <p className="view-subtitle">
-            Packs and decks curated for specific party games or themes.
+            Your personal packs and decks curated for specific party games or themes.
           </p>
         </div>
 
         <div className="view-header-actions">
-          {user && (
-            <div className="filter-pill-group">
-              <button
-                className={`filter-pill ${scope === 'public' ? 'active' : ''}`}
-                onClick={() => setScope('public')}
-              >
-                Public Decks
-              </button>
-              <button
-                className={`filter-pill ${scope === 'mine' ? 'active' : ''}`}
-                onClick={() => setScope('mine')}
-              >
-                My Decks
-              </button>
-              <button
-                className={`filter-pill ${scope === 'subscribed' ? 'active' : ''}`}
-                onClick={() => setScope('subscribed')}
-              >
-                Subscribed
-              </button>
-            </div>
-          )}
+          <div className="filter-pill-group">
+            <button
+              className={`filter-pill ${scope === 'mine' ? 'active' : ''}`}
+              onClick={() => setScope('mine')}
+            >
+              My Decks
+            </button>
+            <button
+              className={`filter-pill ${scope === 'subscribed' ? 'active' : ''}`}
+              onClick={() => setScope('subscribed')}
+            >
+              Subscribed
+            </button>
+          </div>
 
           <button
             className="add-media-btn"
-            onClick={() => {
-              if (!user) {
-                onRequireAuth();
-              } else {
-                setIsCreateOpen(true);
-              }
-            }}
+            onClick={() => setIsCreateOpen(true)}
           >
             <Plus size={16} />
             <span>New Collection</span>
