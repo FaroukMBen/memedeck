@@ -164,6 +164,23 @@ export interface CollectionRule {
   min_likes?: number;
 }
 
+export interface CommunityUser {
+  id: string;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  created_at: string | null;
+  friendship_status: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'self';
+  is_following: boolean;
+}
+
+export interface FriendsOverviewResponse {
+  friends: CommunityUser[];
+  incoming_requests: CommunityUser[];
+  outgoing_requests: CommunityUser[];
+  following: CommunityUser[];
+}
+
 export interface ActivityItem {
   id: string;
   type: 'upload' | 'fork' | 'collection' | 'like';
@@ -470,7 +487,15 @@ export const memedeckApi = {
       method: 'DELETE',
     }),
 
-  // Friendships
+  // Friendships & Community
+  searchUsers: (q?: string, limit = 24) => {
+    const params = new URLSearchParams();
+    if (q?.trim()) params.set('q', q.trim());
+    params.set('limit', String(limit));
+    return apiFetch<{ items: CommunityUser[] }>(`/api/v1/users?${params.toString()}`);
+  },
+  getFriendsOverview: () =>
+    apiFetch<FriendsOverviewResponse>('/api/v1/friends'),
   sendFriendRequest: (userId: string) =>
     apiFetch<{ status: 'pending_sent' | 'friends'; message: string }>(
       `/api/v1/users/${userId}/friend-request`,

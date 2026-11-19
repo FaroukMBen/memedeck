@@ -394,3 +394,54 @@ export function ProfileSkeleton({ isWakingUp = false }: { isWakingUp?: boolean }
   );
 }
 
+/**
+ * Faithful skeleton for the Community & Friends view (activity list or user cards grid).
+ */
+export function CommunitySkeleton({
+  mode = 'feed',
+  isWakingUp = false,
+}: {
+  mode?: 'feed' | 'users';
+  isWakingUp?: boolean;
+}) {
+  return (
+    <div className="skeleton-grid-wrapper">
+      {isWakingUp && <ServerWakeupBanner />}
+      {mode === 'feed' ? (
+        <ul className="activity-list" style={{ pointerEvents: 'none' }}>
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <li key={idx} className="activity-item">
+              <Skeleton width="38px" height="38px" borderRadius="var(--radius-round)" />
+              <div style={{ flex: 1 }}>
+                <Skeleton height="14px" width={`${55 + ((idx * 17) % 30)}%`} style={{ marginBottom: '6px' }} />
+                <Skeleton height="11px" width="80px" />
+              </div>
+              <Skeleton width="52px" height="52px" borderRadius="3px" />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="community-user-grid">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="community-user-card" style={{ pointerEvents: 'none' }}>
+              <div className="community-user-head">
+                <Skeleton width="48px" height="48px" borderRadius="var(--radius-round)" />
+                <div style={{ flex: 1 }}>
+                  <Skeleton height="16px" width="130px" style={{ marginBottom: '6px' }} />
+                  <Skeleton height="12px" width="90px" />
+                </div>
+              </div>
+              <Skeleton height="13px" width="90%" style={{ margin: '0.6rem 0' }} />
+              <div className="community-user-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                <Skeleton height="32px" width="110px" borderRadius="var(--radius)" />
+                <Skeleton height="32px" width="85px" borderRadius="var(--radius)" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
